@@ -88,6 +88,49 @@ button:disabled {
   z-index: 1;
 }
 
+.camera-shell {
+  align-items: stretch;
+  display: none;
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+  z-index: 2;
+}
+
+.camera-shell[hidden] {
+  display: none;
+}
+
+.camera-shell:not([hidden]) {
+  display: flex;
+}
+
+#cameraPreview {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.camera-shell__hud {
+  align-items: end;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.48));
+  bottom: 0;
+  display: flex;
+  left: 0;
+  padding: 1rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+
+.camera-shell__hud p {
+  color: #fff8eb;
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin: 0;
+  text-transform: uppercase;
+}
+
 .empty-state {
   align-items: center;
   border: 1px dashed rgba(255, 255, 255, 0.24);
@@ -215,6 +258,15 @@ h1 {
   padding: 0.9rem 1rem;
 }
 
+.mobile-camera-panel {
+  display: none;
+}
+
+.mobile-camera-panel__actions {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .effects-panel {
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 10px;
@@ -339,7 +391,8 @@ h1 {
   }
 
   .image-workspace {
-    min-height: 62svh;
+    min-height: 56svh;
+    padding: 0.75rem;
   }
 
   #processedCanvas {
@@ -350,6 +403,18 @@ h1 {
     border-left: 0;
     min-height: auto;
   }
+
+  .mobile-camera-panel {
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 10px;
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .mobile-camera-panel__actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (min-width: 560px) {
@@ -359,5 +424,9 @@ h1 {
 
   #downloadButton {
     grid-column: 1 / -1;
+  }
+
+  .mobile-camera-panel__actions {
+    grid-template-columns: 1fr 1fr 1fr;
   }
 }

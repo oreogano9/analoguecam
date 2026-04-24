@@ -4,12 +4,18 @@ import { applySpektraGrainToRgba, loadSpektraProfile, SPEKTRA_GRAIN_EFFECT } fro
 const canvas = document.querySelector("#processedCanvas");
 const workspace = document.querySelector(".image-workspace");
 const emptyState = document.querySelector("#emptyState");
+const cameraShell = document.querySelector("#cameraShell");
+const cameraPreview = document.querySelector("#cameraPreview");
+const cameraPresetLabel = document.querySelector("#cameraPresetLabel");
 const fileInput = document.querySelector("#fileInput");
 const lookSelect = document.querySelector("#lookSelect");
 const intensitySlider = document.querySelector("#intensitySlider");
 const intensityValue = document.querySelector("#intensityValue");
 const effectsRoot = document.querySelector("#effectsRoot");
 const importedEffectsRoot = document.querySelector("#importedEffectsRoot");
+const startCameraButton = document.querySelector("#startCameraButton");
+const capturePhotoButton = document.querySelector("#capturePhotoButton");
+const stopCameraButton = document.querySelector("#stopCameraButton");
 const resetButton = document.querySelector("#resetButton");
 const toggleEditsButton = document.querySelector("#toggleEditsButton");
 const downloadButton = document.querySelector("#downloadButton");
@@ -29,6 +35,7 @@ const FILTER_SERIES_PATH = "./nomo/filters/series.json";
 const FILTERS_ROOT = "./nomo/filters";
 const LUTS_ROOT = "./nomo/dat";
 const SPEKTRA_PROFILE_PATH = "./spektrafilm/profiles/kodak_gold_200.json";
+const MOBILE_MEDIA_QUERY = window.matchMedia("(max-width: 900px)");
 const COLOR_MATRIX = new Float32Array([
   0.24, 0.68, 0.08, 0.0,
   0.24, 0.68, 0.08, 0.0,
@@ -66,6 +73,8 @@ const state = {
   aesKey: null,
   geometry: null,
   beforeHoldActive: false,
+  cameraStream: null,
+  cameraActive: false,
   effects: cloneEffectDefaults(),
   effectInputs: new Map(),
   importedEffects: {
@@ -278,6 +287,7 @@ async function main() {
     state.geometry = initializeGeometry();
     renderEffectControls();
     renderImportedEffectControls();
+    bindCameraUi();
     await initializeApp();
   } catch (error) {
     console.error(error);
@@ -294,6 +304,7 @@ async function initializeApp() {
   state.selectedFilterFilename = "";
   syncIntensityControlState();
   updateEffectControlState();
+  updateMobileCameraState();
   setStatus("Open a photo to start.");
 }
 
@@ -554,24 +565,132 @@ function initializeGeometry() {
   return { vao, positionBuffer, texCoordBuffer };
 }
 
+function bindCameraUi() {
+  updateMobileCameraState();
+  MOBILE_MEDIA_QUERY.addEventListener("change", handleMobileViewportChange);
+}
+
+function handleMobileViewportChange(event) {
+  if (!event.matches && state.cameraActive) {
+    stopCamera();
+  }
+  updateMobileCameraState();
+}
+
+function isMobileView() {
+  return MOBILE_MEDIA_QUERY.matches;
+}
+
+function updateMobileCameraState() {
+  const mobile = isMobileView();
+  const cameraSupported = Boolean(navigator.mediaDevices?.getUserMedia);
+  const canOpen = mobile && cameraSupported && !state.cameraActive && !lookSelect.disabled;
+
+  startCameraButton.disabled = !canOpen;
+  capturePhotoButton.disabled = !mobile || !state.cameraActive;
+  stopCameraButton.disabled = !mobile || !state.cameraActive;
+  cameraPresetLabel.textContent = state.cameraActive
+    ? `Capture with ${state.filterMap.get(lookSelect.value)?.name ?? "selected preset"}`
+    : "Ready to capture with the selected preset.";
+}
+
+async function startCamera() {
+  if (!isMobileView()) {
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus("Camera capture is not available in this browser.");
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+      },
+      audio: false,
+    });
+
+    state.cameraStream = stream;
+    state.cameraActive = true;
+    cameraPreview.srcObject = stream;
+    cameraShell.hidden = false;
+    canvas.style.display = "none";
+    emptyState.style.display = "none";
+    updateMobileCameraState();
+    setStatus("Camera ready. Capture applies the selected preset.");
+  } catch (error) {
+    console.error(error);
+    setStatus("Unable to open the camera.");
+    updateMobileCameraState();
+  }
+}
+
+function stopCamera() {
+  if (state.cameraStream) {
+    for (const track of state.cameraStream.getTracks()) {
+      track.stop();
+    }
+  }
+
+  state.cameraStream = null;
+  state.cameraActive = false;
+  cameraPreview.srcObject = null;
+  cameraShell.hidden = true;
+  updateMobileCameraState();
+
+  if (state.source) {
+    renderImage();
+  } else {
+    emptyState.style.display = "flex";
+  }
+}
+
+async function captureCameraFrame() {
+  if (!state.cameraActive || !cameraPreview.videoWidth || !cameraPreview.videoHeight) {
+    return;
+  }
+
+  const captureCanvas = document.createElement("canvas");
+  const width = cameraPreview.videoWidth;
+  const height = cameraPreview.videoHeight;
+  captureCanvas.width = width;
+  captureCanvas.height = height;
+  const context = captureCanvas.getContext("2d");
+
+  if (!context) {
+    setStatus("Failed to capture the camera frame.");
+    return;
+  }
+
+  context.drawImage(cameraPreview, 0, 0, width, height);
+  const blob = await new Promise((resolve) => captureCanvas.toBlob(resolve, "image/jpeg", 0.92));
+  if (!blob) {
+    setStatus("Failed to capture the camera frame.");
+    return;
+  }
+
+  await loadBlob(blob, `mobile-capture-${Date.now()}.jpg`);
+  stopCamera();
+}
+
 function loadFile(file) {
   if (!file || !gl) {
     return;
   }
 
+  loadBlob(file, file.name);
+}
+
+async function loadBlob(blob, sourceName = "nomo-edit") {
   setStatus("Loading photo...");
   const image = new Image();
-  const url = URL.createObjectURL(file);
+  const url = URL.createObjectURL(blob);
 
   image.onload = async () => {
     try {
-      state.source = image;
-      state.sourceResolution = { width: image.naturalWidth, height: image.naturalHeight };
-      state.sourceName = file.name.replace(/\.[^/.]+$/, "") || "nomo-edit";
-      uploadSourceTexture(image);
-      await ensureLutTexture(lookSelect.value);
-      renderImage();
-      setStatus(`${state.filterMap.get(lookSelect.value)?.name ?? lookSelect.value} loaded.`);
+      await applyLoadedImage(image, sourceName);
     } catch (error) {
       console.error(error);
       setStatus("Failed to process the photo.");
@@ -586,6 +705,16 @@ function loadFile(file) {
   };
 
   image.src = url;
+}
+
+async function applyLoadedImage(image, sourceName = "nomo-edit") {
+  state.source = image;
+  state.sourceResolution = { width: image.naturalWidth, height: image.naturalHeight };
+  state.sourceName = sourceName.replace(/\.[^/.]+$/, "") || "nomo-edit";
+  uploadSourceTexture(image);
+  await ensureLutTexture(lookSelect.value);
+  renderImage();
+  setStatus(`${state.filterMap.get(lookSelect.value)?.name ?? lookSelect.value} loaded.`);
 }
 
 function fitCanvasToImage(image) {
@@ -747,6 +876,10 @@ function ensureRenderTarget(target, width, height) {
 function renderImage() {
   if (!state.source || !state.sourceTexture || !gl || !state.geometry) {
     return;
+  }
+
+  if (!state.cameraActive) {
+    cameraShell.hidden = true;
   }
 
   if (state.showingOriginal) {
@@ -992,6 +1125,9 @@ function disableControls(message) {
   fileInput.disabled = true;
   lookSelect.disabled = true;
   intensitySlider.disabled = true;
+  startCameraButton.disabled = true;
+  capturePhotoButton.disabled = true;
+  stopCameraButton.disabled = true;
   resetButton.disabled = true;
   toggleEditsButton.disabled = true;
   downloadButton.disabled = true;
@@ -1172,9 +1308,18 @@ function generateCustomLut(recipeName) {
 }
 
 fileInput.addEventListener("change", (event) => loadFile(event.target.files[0]));
+startCameraButton.addEventListener("click", startCamera);
+capturePhotoButton.addEventListener("click", () => {
+  captureCameraFrame().catch((error) => {
+    console.error(error);
+    setStatus("Failed to capture the camera frame.");
+  });
+});
+stopCameraButton.addEventListener("click", stopCamera);
 
 lookSelect.addEventListener("change", async () => {
   syncIntensityControlState();
+  updateMobileCameraState();
   if (!state.source) {
     return;
   }
@@ -1271,3 +1416,4 @@ resetButton.addEventListener("click", resetControls);
 toggleEditsButton.addEventListener("click", toggleEditsVisibility);
 downloadButton.addEventListener("click", downloadImage);
 window.addEventListener("resize", updateCanvasDisplaySize);
+window.addEventListener("pagehide", stopCamera);

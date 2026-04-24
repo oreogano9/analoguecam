@@ -13,6 +13,12 @@
         <div class="empty-state" id="emptyState">
           <p>Open a photo to start editing.</p>
         </div>
+        <div class="camera-shell" id="cameraShell" hidden>
+          <video id="cameraPreview" autoplay playsinline muted></video>
+          <div class="camera-shell__hud">
+            <p id="cameraPresetLabel">Ready to capture with the selected preset.</p>
+          </div>
+        </div>
         <canvas id="processedCanvas"></canvas>
       </section>
 
@@ -40,6 +46,18 @@
             <span id="intensityValue">100%</span>
           </label>
         </div>
+
+        <section class="mobile-camera-panel" aria-label="Mobile camera capture">
+          <div class="effects-panel__header">
+            <h2>Mobile Capture</h2>
+            <p>Visible on mobile only. Captures a photo and applies the currently selected preset.</p>
+          </div>
+          <div class="mobile-camera-panel__actions">
+            <button id="startCameraButton" type="button" disabled>Open camera</button>
+            <button id="capturePhotoButton" type="button" disabled>Take photo</button>
+            <button id="stopCameraButton" type="button" disabled>Close camera</button>
+          </div>
+        </section>
 
         <section class="effects-panel" aria-label="APK backed effects">
           <div class="effects-panel__header">

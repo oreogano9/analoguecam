@@ -88,6 +88,19 @@ button:disabled {
   z-index: 1;
 }
 
+.app-shell > *,
+.toolbelt > *,
+.effects-panel,
+.effect-group,
+.effect-card,
+.sliders,
+.sliders label,
+.select-control,
+.mobile-camera-panel,
+.mobile-camera-panel__actions {
+  min-width: 0;
+}
+
 .camera-shell {
   align-items: stretch;
   display: none;
@@ -158,6 +171,7 @@ button:disabled {
   flex-direction: column;
   gap: 1.5rem;
   min-height: 100svh;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: clamp(1.25rem, 3vw, 2.5rem);
 }
@@ -240,6 +254,8 @@ h1 {
 
 .sliders input {
   accent-color: var(--accent);
+  display: block;
+  max-width: 100%;
   width: 100%;
 }
 
@@ -325,10 +341,12 @@ h1 {
   display: flex;
   gap: 0.75rem;
   justify-content: space-between;
+  min-width: 0;
 }
 
 .effect-card__label {
   font-weight: 800;
+  min-width: 0;
 }
 
 .effect-card__value,
@@ -345,6 +363,8 @@ h1 {
 
 .effect-card input[type="range"] {
   accent-color: var(--accent);
+  display: block;
+  max-width: 100%;
   width: 100%;
 }
 
@@ -402,6 +422,7 @@ h1 {
   .toolbelt {
     border-left: 0;
     min-height: auto;
+    padding-inline: 1rem;
   }
 
   .mobile-camera-panel {
@@ -414,6 +435,12 @@ h1 {
 
   .mobile-camera-panel__actions {
     grid-template-columns: 1fr;
+  }
+
+  .effect-group__header,
+  .effect-card__row {
+    align-items: start;
+    flex-wrap: wrap;
   }
 }
 

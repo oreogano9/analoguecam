@@ -144,31 +144,42 @@ uniform mat4 u_colorMatrix;
 in highp vec2 v_texCoord;
 out vec4 outColor;
 
+highp vec3 sampleLut(highp float redIndex, highp float greenIndex, highp float blueIndex) {
+  highp float x = redIndex + blueIndex * u_gridsize + 0.5;
+  highp float y = greenIndex + 0.5;
+  return texture(u_lut, vec2(x / u_texwidth, y / u_gridsize)).rgb;
+}
+
 void main() {
   highp vec4 textureColor = texture(u_image, v_texCoord);
 
-  highp float slice = textureColor.b * (u_gridsize - 1.0);
-  highp float islice0 = floor(slice);
-  highp float islice1 = min(31.0, islice0 + 1.0);
-  highp float fslice = fract(slice);
+  highp vec3 scaled = clamp(textureColor.rgb, 0.0, 1.0) * (u_gridsize - 1.0);
+  highp vec3 index0 = floor(scaled);
+  highp vec3 index1 = min(vec3(u_gridsize - 1.0), index0 + 1.0);
+  highp vec3 fraction = fract(scaled);
 
-  highp float x = textureColor.r * (u_gridsize - 1.0);
-  highp float x1 = x + islice0 * u_gridsize + 0.5;
-  highp float x2 = x + islice1 * u_gridsize + 0.5;
-  highp float y = textureColor.g * (u_gridsize - 1.0) + 0.5;
+  highp vec3 c000 = sampleLut(index0.r, index0.g, index0.b);
+  highp vec3 c100 = sampleLut(index1.r, index0.g, index0.b);
+  highp vec3 c010 = sampleLut(index0.r, index1.g, index0.b);
+  highp vec3 c110 = sampleLut(index1.r, index1.g, index0.b);
+  highp vec3 c001 = sampleLut(index0.r, index0.g, index1.b);
+  highp vec3 c101 = sampleLut(index1.r, index0.g, index1.b);
+  highp vec3 c011 = sampleLut(index0.r, index1.g, index1.b);
+  highp vec3 c111 = sampleLut(index1.r, index1.g, index1.b);
 
-  highp vec2 texPos1 = vec2(x1 / u_texwidth, y / 32.0);
-  highp vec2 texPos2 = vec2(x2 / u_texwidth, y / 32.0);
-
-  highp vec4 newColor1 = texture(u_lut, texPos1);
-  highp vec4 newColor2 = texture(u_lut, texPos2);
+  highp vec3 c00 = mix(c000, c100, fraction.r);
+  highp vec3 c10 = mix(c010, c110, fraction.r);
+  highp vec3 c01 = mix(c001, c101, fraction.r);
+  highp vec3 c11 = mix(c011, c111, fraction.r);
+  highp vec3 c0 = mix(c00, c10, fraction.g);
+  highp vec3 c1 = mix(c01, c11, fraction.g);
+  highp vec3 newColor = mix(c0, c1, fraction.b);
 
   if (u_isBnW == 1.0) {
     textureColor = textureColor * u_colorMatrix;
   }
 
-  highp vec4 newColor = mix(newColor1, newColor2, fslice);
-  outColor = mix(textureColor, vec4(newColor.rgb, textureColor.a), u_intensity);
+  outColor = mix(textureColor, vec4(newColor, textureColor.a), u_intensity);
 }
 `;
 
@@ -1049,8 +1060,8 @@ function uploadLutTexture(rgbBytes) {
   state.lutTexture = gl.createTexture();
   gl.activeTexture(gl.TEXTURE1);
   gl.bindTexture(gl.TEXTURE_2D, state.lutTexture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);

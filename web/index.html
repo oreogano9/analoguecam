@@ -15,6 +15,10 @@
         </div>
         <div class="camera-shell" id="cameraShell" hidden>
           <video id="cameraPreview" autoplay playsinline muted></video>
+          <div class="camera-device-frame">
+            <img src="./assets/kodak-funsaver-camera-overlay.png" alt="" aria-hidden="true" />
+            <button class="camera-body-shutter" id="cameraCaptureButton" type="button" aria-label="Take photo"></button>
+          </div>
           <div class="camera-shell__top">
             <button id="cameraSettingsButton" type="button">Settings</button>
           </div>
@@ -25,7 +29,6 @@
             </label>
             <p id="cameraPresetLabel">Live filtered preview.</p>
           </div>
-          <button class="camera-shutter" id="cameraCaptureButton" type="button" aria-label="Take photo"></button>
         </div>
         <canvas id="processedCanvas"></canvas>
       </section>

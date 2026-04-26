@@ -921,10 +921,25 @@ async function saveCurrentCameraFrame() {
     return;
   }
 
+  const filename = `analoguecam-${selected?.filename ?? "camera"}-${Date.now()}.jpg`;
+  const file = new File([blob], filename, { type: "image/jpeg" });
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: "Analoguecam photo" });
+      setStatus("Opened save/share sheet for current camera frame.");
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        console.error(error);
+        setStatus("Failed to open the save/share sheet.");
+      }
+    }
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `analoguecam-${selected?.filename ?? "camera"}-${Date.now()}.jpg`;
+  link.download = filename;
   document.body.append(link);
   link.click();
   link.remove();

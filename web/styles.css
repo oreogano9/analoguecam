@@ -138,6 +138,18 @@ button:disabled {
   display: none;
 }
 
+.camera-device-frame {
+  display: none;
+}
+
+.camera-device-frame img {
+  display: block;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  width: 100%;
+}
+
 .camera-shell__top {
   display: flex;
   justify-content: flex-end;
@@ -204,25 +216,24 @@ button:disabled {
   width: 100%;
 }
 
-.camera-shutter {
-  background: #fff8eb;
-  border: 4px solid rgba(18, 20, 17, 0.82);
+.camera-body-shutter {
+  background: transparent;
+  border: 0;
   border-radius: 999px;
-  bottom: max(1.2rem, env(safe-area-inset-bottom));
-  box-shadow: 0 0 0 4px rgba(255, 248, 235, 0.24);
-  height: 72px;
-  left: 50%;
+  height: 9.5%;
+  left: 72.5%;
   min-height: 0;
   padding: 0;
   pointer-events: auto;
   position: absolute;
-  transform: translateX(-50%);
-  width: 72px;
+  top: 78.6%;
+  width: 18%;
   z-index: 4;
 }
 
-.camera-shutter:hover {
-  transform: translateX(-50%);
+.camera-body-shutter:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: none;
 }
 
 .empty-state {
@@ -554,6 +565,18 @@ h1 {
 
   body.camera-mode-active .toolbelt {
     display: none;
+  }
+
+  body.camera-mode-active .camera-device-frame {
+    display: block;
+    height: min(100svh, calc(100vw * 2.0688));
+    left: 50%;
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(100vw, calc(100svh * 0.4834));
+    z-index: 3;
   }
 
   body.camera-mode-active #processedCanvas {

@@ -59,6 +59,9 @@ const MOBILE_MEDIA_QUERY = window.matchMedia("(max-width: 900px)");
 const GALLERY_DB_NAME = "analoguecam-gallery";
 const GALLERY_DB_VERSION = 1;
 const GALLERY_STORE_NAME = "shots";
+const CAMERA_PERMISSION_STORAGE_KEY = "analoguecam-camera-permission";
+const CAMERA_PERMISSION_GRANTED = "granted";
+const CAMERA_PERMISSION_DENIED = "denied";
 const COLOR_MATRIX = new Float32Array([
   0.24, 0.68, 0.08, 0.0,
   0.24, 0.68, 0.08, 0.0,
@@ -114,6 +117,7 @@ const state = {
   cameraActive: false,
   cameraAnimationFrame: 0,
   cameraAutostartAttempted: false,
+  cameraPermissionState: readStoredCameraPermission(),
   cameraFlashEnabled: false,
   mobileSettingsOpen: false,
   galleryDb: null,
@@ -827,6 +831,63 @@ function isMobileView() {
   return MOBILE_MEDIA_QUERY.matches;
 }
 
+function readStoredCameraPermission() {
+  try {
+    return window.localStorage.getItem(CAMERA_PERMISSION_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredCameraPermission(value) {
+  try {
+    window.localStorage.setItem(CAMERA_PERMISSION_STORAGE_KEY, value);
+  } catch {
+    // Storage can be unavailable in private mode; browser permission remains authoritative.
+  }
+}
+
+async function readBrowserCameraPermission() {
+  if (!navigator.permissions?.query) {
+    return null;
+  }
+
+  try {
+    const status = await navigator.permissions.query({ name: "camera" });
+    state.cameraPermissionState = status.state;
+    status.onchange = () => {
+      state.cameraPermissionState = status.state;
+      if (status.state === CAMERA_PERMISSION_GRANTED || status.state === CAMERA_PERMISSION_DENIED) {
+        writeStoredCameraPermission(status.state);
+      }
+      updateMobileCameraState();
+    };
+    return status.state;
+  } catch {
+    return null;
+  }
+}
+
+async function canAutostartCameraWithoutPrompt() {
+  const browserPermission = await readBrowserCameraPermission();
+  if (browserPermission === CAMERA_PERMISSION_GRANTED) {
+    writeStoredCameraPermission(CAMERA_PERMISSION_GRANTED);
+    return true;
+  }
+  if (browserPermission === CAMERA_PERMISSION_DENIED) {
+    writeStoredCameraPermission(CAMERA_PERMISSION_DENIED);
+    return false;
+  }
+  if (browserPermission === "prompt") {
+    return false;
+  }
+
+  // A stored grant is only a hint. If the browser cannot confirm it, calling
+  // getUserMedia automatically can still trigger the exact repeated prompt we
+  // are trying to avoid.
+  return false;
+}
+
 function updateMobileCameraState() {
   const mobile = isMobileView();
   const cameraSupported = Boolean(navigator.mediaDevices?.getUserMedia);
@@ -856,9 +917,13 @@ function queueMobileCameraAutostart() {
   }
 
   state.cameraAutostartAttempted = true;
-  window.setTimeout(() => {
+  window.setTimeout(async () => {
     if (isMobileView() && !state.cameraActive) {
-      startCamera();
+      if (await canAutostartCameraWithoutPrompt()) {
+        startCamera({ automatic: true });
+      } else {
+        setStatus("Tap Open camera once to grant camera access.");
+      }
     }
   }, 0);
 }
@@ -891,6 +956,8 @@ async function startCamera() {
     cameraPreview.srcObject = stream;
     cameraPreviewSlot.append(canvas);
     await cameraPreview.play();
+    state.cameraPermissionState = CAMERA_PERMISSION_GRANTED;
+    writeStoredCameraPermission(CAMERA_PERMISSION_GRANTED);
     resetCanvasView();
     cameraShell.hidden = false;
     canvas.style.display = "block";
@@ -900,7 +967,13 @@ async function startCamera() {
     setStatus("Camera ready. Live preview uses the selected preset.");
   } catch (error) {
     console.error(error);
-    setStatus("Unable to open the camera.");
+    if (error?.name === "NotAllowedError" || error?.name === "SecurityError") {
+      state.cameraPermissionState = CAMERA_PERMISSION_DENIED;
+      writeStoredCameraPermission(CAMERA_PERMISSION_DENIED);
+      setStatus("Camera permission is blocked. Enable it in Safari/site settings.");
+    } else {
+      setStatus("Unable to open the camera.");
+    }
     updateMobileCameraState();
   }
 }

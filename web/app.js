@@ -911,6 +911,9 @@ function updateMobileCameraState() {
   document.body.classList.toggle("camera-mode-active", mobile && state.cameraActive);
   document.body.classList.toggle("mobile-gallery-active", mobile && !state.cameraActive && !state.mobileSettingsOpen);
   document.body.classList.toggle("mobile-settings-active", mobile && !state.cameraActive && state.mobileSettingsOpen);
+  if (!mobile || !state.cameraActive) {
+    setCameraGalleryPeek(false);
+  }
   updateCameraFlashState();
 }
 
@@ -985,6 +988,7 @@ async function startCamera() {
 
 function stopCamera(options = {}) {
   stopLiveCameraRender();
+  setCameraGalleryPeek(false);
 
   if (state.cameraStream) {
     for (const track of state.cameraStream.getTracks()) {
@@ -1882,6 +1886,10 @@ function isCameraSwipeBlockedTarget(target) {
   return target instanceof Element && Boolean(target.closest("button, select, input, label"));
 }
 
+function setCameraGalleryPeek(enabled) {
+  document.body.classList.toggle("camera-gallery-peek", enabled);
+}
+
 function beginCameraSwipe(clientY, pointerId, target, captureTarget) {
   if (state.cameraSwipe.active || !state.cameraActive || !isMobileView() || isCameraSwipeBlockedTarget(target)) {
     return false;
@@ -1892,6 +1900,7 @@ function beginCameraSwipe(clientY, pointerId, target, captureTarget) {
   state.cameraSwipe.startY = clientY;
   state.cameraSwipe.distance = 0;
   workspace.style.transition = "none";
+  setCameraGalleryPeek(true);
 
   if (captureTarget?.setPointerCapture && typeof pointerId === "number") {
     captureTarget.setPointerCapture(pointerId);
@@ -1941,6 +1950,7 @@ function endCameraSwipe(pointerId, captureTarget) {
   workspace.style.transform = "";
   window.setTimeout(() => {
     workspace.style.transition = "";
+    setCameraGalleryPeek(false);
   }, 220);
 }
 

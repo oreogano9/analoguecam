@@ -138,6 +138,11 @@ const state = {
     lastX: 0,
     lastY: 0,
   },
+  cameraSwipe: {
+    active: false,
+    startY: 0,
+    distance: 0,
+  },
 };
 
 const defaults = {
@@ -959,9 +964,7 @@ async function saveCurrentCameraFrame() {
     return;
   }
 
-  if (navigator.vibrate) {
-    navigator.vibrate(35);
-  }
+  vibrateCapture();
 
   stopLiveCameraRender();
   renderImage({ includeSpektraGrain: true });
@@ -981,6 +984,12 @@ async function saveCurrentCameraFrame() {
   state.galleryItems.unshift(item);
   renderGallery();
   setStatus("Saved current camera frame to local gallery.");
+}
+
+function vibrateCapture() {
+  if (navigator.vibrate) {
+    navigator.vibrate([22, 28, 22]);
+  }
 }
 
 function openGalleryDb() {
@@ -1689,6 +1698,67 @@ function stopCanvasPan(event) {
   updateCanvasViewTransform();
 }
 
+function handleCameraSwipeStart(event) {
+  if (!state.cameraActive || !isMobileView() || event.target.closest("button, select, input, label")) {
+    return;
+  }
+
+  const touch = event.touches?.[0];
+  if (!touch) {
+    return;
+  }
+
+  state.cameraSwipe.active = true;
+  state.cameraSwipe.startY = touch.clientY;
+  state.cameraSwipe.distance = 0;
+  workspace.style.transition = "none";
+}
+
+function handleCameraSwipeMove(event) {
+  if (!state.cameraSwipe.active) {
+    return;
+  }
+
+  const touch = event.touches?.[0];
+  if (!touch) {
+    return;
+  }
+
+  const distance = Math.max(0, state.cameraSwipe.startY - touch.clientY);
+  state.cameraSwipe.distance = distance;
+  if (distance > 8) {
+    event.preventDefault();
+  }
+
+  const eased = Math.min(window.innerHeight, distance * 0.92);
+  workspace.style.transform = `translateY(${-eased}px)`;
+}
+
+function handleCameraSwipeEnd() {
+  if (!state.cameraSwipe.active) {
+    return;
+  }
+
+  const shouldOpenGallery = state.cameraSwipe.distance > Math.min(140, window.innerHeight * 0.18);
+  state.cameraSwipe.active = false;
+  workspace.style.transition = "transform 220ms ease";
+
+  if (shouldOpenGallery) {
+    workspace.style.transform = "translateY(-100svh)";
+    window.setTimeout(() => {
+      workspace.style.transition = "";
+      workspace.style.transform = "";
+      stopCamera();
+    }, 220);
+    return;
+  }
+
+  workspace.style.transform = "";
+  window.setTimeout(() => {
+    workspace.style.transition = "";
+  }, 220);
+}
+
 async function selectFilter(filename) {
   lookSelect.value = filename;
   cameraLookSelect.value = filename;
@@ -2019,6 +2089,7 @@ function handleCameraCaptureClick() {
 
 capturePhotoButton.addEventListener("click", handleCameraCaptureClick);
 cameraCaptureButton.addEventListener("click", handleCameraCaptureClick);
+cameraCaptureButton.addEventListener("pointerdown", vibrateCapture);
 stopCameraButton.addEventListener("click", stopCamera);
 cameraSettingsButton.addEventListener("click", () => stopCamera({ settings: true }));
 galleryCameraButton.addEventListener("click", startCamera);
@@ -2113,6 +2184,10 @@ toggleEditsButton.addEventListener("click", toggleEditsVisibility);
 downloadButton.addEventListener("click", downloadImage);
 window.addEventListener("resize", updateCanvasDisplaySize);
 window.addEventListener("pagehide", stopCamera);
+cameraShell.addEventListener("touchstart", handleCameraSwipeStart, { passive: true });
+cameraShell.addEventListener("touchmove", handleCameraSwipeMove, { passive: false });
+cameraShell.addEventListener("touchend", handleCameraSwipeEnd);
+cameraShell.addEventListener("touchcancel", handleCameraSwipeEnd);
 workspace.addEventListener("wheel", handleWorkspaceWheel, { passive: false });
 canvas.addEventListener("pointerdown", startCanvasPan);
 canvas.addEventListener("pointermove", moveCanvasPan);

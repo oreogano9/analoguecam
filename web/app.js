@@ -117,6 +117,7 @@ const state = {
   cameraFlashEnabled: false,
   mobileSettingsOpen: false,
   galleryDb: null,
+  galleryReadyPromise: null,
   galleryItems: [],
   galleryObjectUrls: [],
   selectedGalleryItem: null,
@@ -377,39 +378,84 @@ async function main() {
 async function initializeApp() {
   setStatus("Loading NOMO filter metadata...");
   state.aesKey = await crypto.subtle.importKey("raw", NOMO_AES_KEY, "AES-CBC", false, ["decrypt"]);
-  state.spektraProfile = await loadSpektraProfile(SPEKTRA_PROFILE_PATH);
-  state.galleryDb = await openGalleryDb();
-  state.galleryItems = await loadGalleryItems();
-  renderGallery();
-  state.nomoOverlayImages = await loadNomoOverlayImages();
   state.filters = await loadFilterCatalog();
   populateFilterSelect(state.filters);
-  state.filterEffectDefaults = await loadFilterEffectDefaults(state.filters);
-  applyFilterEffectDefaults(lookSelect.value);
   state.selectedFilterFilename = "";
   syncIntensityControlState();
   updateEffectControlState();
   updateMobileCameraState();
   queueMobileCameraAutostart();
-  setStatus("Open a photo to start.");
+  setStatus(isMobileView() ? "Opening camera..." : "Open a photo to start.");
+  initializeDeferredAssets();
+}
+
+function initializeDeferredAssets() {
+  loadFilterEffectDefaults(state.filters)
+    .then((defaultsByFilter) => {
+      state.filterEffectDefaults = defaultsByFilter;
+      applyFilterEffectDefaults(lookSelect.value);
+      syncEffectInputs();
+      updateEffectControlState();
+      renderImageAfterSettingsChange();
+    })
+    .catch((error) => {
+      console.error(error);
+    });
+
+  loadNomoOverlayImages()
+    .then((images) => {
+      state.nomoOverlayImages = images;
+      renderImageAfterSettingsChange();
+    })
+    .catch((error) => {
+      console.error(error);
+    });
+
+  loadSpektraProfile(SPEKTRA_PROFILE_PATH)
+    .then((profile) => {
+      state.spektraProfile = profile;
+      renderImageAfterSettingsChange();
+    })
+    .catch((error) => {
+      console.error(error);
+    });
+
+  state.galleryReadyPromise = openGalleryDb()
+    .then(async (db) => {
+      state.galleryDb = db;
+      state.galleryItems = await loadGalleryItems();
+      renderGallery();
+      return db;
+    })
+    .catch((error) => {
+      console.error(error);
+      return null;
+    });
 }
 
 async function loadNomoOverlayImages() {
-  return {
-    nomoGrain: await loadOverlayImage(`${OVERLAYS_ROOT}/${NOMO_OVERLAY_PATHS.nomoGrain}`),
-    vignette: await loadOverlayImage(`${OVERLAYS_ROOT}/${NOMO_OVERLAY_PATHS.vignette}`),
-    dust: await Promise.all(NOMO_OVERLAY_PATHS.dust.map((name) => loadOverlayImage(`${OVERLAYS_ROOT}/${name}`))),
-    lightLeak: await Promise.all(NOMO_OVERLAY_PATHS.lightLeak.map((name) => loadOverlayImage(`${OVERLAYS_ROOT}/${name}`))),
-  };
+  const [nomoGrain, vignette, dust, lightLeak] = await Promise.all([
+    loadOverlayImage(`${OVERLAYS_ROOT}/${NOMO_OVERLAY_PATHS.nomoGrain}`),
+    loadOverlayImage(`${OVERLAYS_ROOT}/${NOMO_OVERLAY_PATHS.vignette}`),
+    Promise.all(NOMO_OVERLAY_PATHS.dust.map((name) => loadOverlayImage(`${OVERLAYS_ROOT}/${name}`))),
+    Promise.all(NOMO_OVERLAY_PATHS.lightLeak.map((name) => loadOverlayImage(`${OVERLAYS_ROOT}/${name}`))),
+  ]);
+
+  return { nomoGrain, vignette, dust, lightLeak };
 }
 
 async function loadFilterCatalog() {
   const series = await fetchJson(FILTER_SERIES_PATH);
   const allFilters = [];
+  const familyEntries = await Promise.all(
+    series.map(async (family) => ({
+      family,
+      entries: await fetchJson(`${FILTERS_ROOT}/${family.filename}.json`),
+    })),
+  );
 
-  for (const family of series) {
-    const familyEntries = await fetchJson(`${FILTERS_ROOT}/${family.filename}.json`);
-    for (const entry of familyEntries) {
+  for (const { family, entries } of familyEntries) {
+    for (const entry of entries) {
       allFilters.push({
         group: family.name_en,
         groupFilename: family.filename,
@@ -991,6 +1037,12 @@ async function saveCurrentCameraFrame() {
   }
 
   const filename = `analoguecam-${selected?.filename ?? "camera"}-${Date.now()}.jpg`;
+  const galleryReady = await ensureGalleryReady();
+  if (!galleryReady) {
+    setStatus("Local gallery storage is unavailable in this browser.");
+    return;
+  }
+
   const item = await saveGalleryBlob(blob, filename);
   state.galleryItems.unshift(item);
   renderGallery();
@@ -1017,6 +1069,16 @@ function updateCameraFlashState() {
 function toggleCameraFlash() {
   state.cameraFlashEnabled = !state.cameraFlashEnabled;
   updateCameraFlashState();
+}
+
+async function ensureGalleryReady() {
+  if (state.galleryDb) {
+    return true;
+  }
+  if (state.galleryReadyPromise) {
+    await state.galleryReadyPromise;
+  }
+  return Boolean(state.galleryDb);
 }
 
 function openGalleryDb() {

@@ -16,7 +16,10 @@
         <div class="camera-shell" id="cameraShell" hidden>
           <video id="cameraPreview" autoplay playsinline muted></video>
           <div class="camera-device-frame">
-            <div class="camera-preview-slot" id="cameraPreviewSlot"></div>
+            <div class="camera-preview-slot" id="cameraPreviewSlot">
+              <button class="camera-preview-hit" id="cameraPreviewGalleryButton" type="button" aria-label="Open gallery"></button>
+              <div class="camera-flash" id="cameraFlash" aria-hidden="true"></div>
+            </div>
             <img src="./assets/kodak-funsaver-camera-overlay.png" alt="" aria-hidden="true" />
             <button class="camera-body-shutter" id="cameraCaptureButton" type="button" aria-label="Take photo"></button>
           </div>

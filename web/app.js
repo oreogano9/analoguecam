@@ -7,6 +7,8 @@ const emptyState = document.querySelector("#emptyState");
 const cameraShell = document.querySelector("#cameraShell");
 const cameraPreview = document.querySelector("#cameraPreview");
 const cameraPreviewSlot = document.querySelector("#cameraPreviewSlot");
+const cameraPreviewGalleryButton = document.querySelector("#cameraPreviewGalleryButton");
+const cameraFlash = document.querySelector("#cameraFlash");
 const cameraPresetLabel = document.querySelector("#cameraPresetLabel");
 const cameraLookSelect = document.querySelector("#cameraLookSelect");
 const fileInput = document.querySelector("#fileInput");
@@ -967,6 +969,7 @@ async function saveCurrentCameraFrame() {
   }
 
   vibrateCapture();
+  flashCameraPreview();
 
   stopLiveCameraRender();
   renderImage({ includeSpektraGrain: true });
@@ -992,6 +995,12 @@ function vibrateCapture() {
   if (navigator.vibrate) {
     navigator.vibrate([22, 28, 22]);
   }
+}
+
+function flashCameraPreview() {
+  cameraFlash.classList.remove("is-active");
+  void cameraFlash.offsetWidth;
+  cameraFlash.classList.add("is-active");
 }
 
 function openGalleryDb() {
@@ -1868,6 +1877,7 @@ function disableControls(message) {
   startCameraButton.disabled = true;
   capturePhotoButton.disabled = true;
   cameraCaptureButton.disabled = true;
+  cameraPreviewGalleryButton.disabled = true;
   stopCameraButton.disabled = true;
   cameraSettingsButton.disabled = true;
   galleryCameraButton.disabled = true;
@@ -2080,6 +2090,7 @@ function handleCameraCaptureClick() {
 capturePhotoButton.addEventListener("click", handleCameraCaptureClick);
 cameraCaptureButton.addEventListener("click", handleCameraCaptureClick);
 cameraCaptureButton.addEventListener("pointerdown", vibrateCapture);
+cameraPreviewGalleryButton.addEventListener("click", () => stopCamera());
 stopCameraButton.addEventListener("click", stopCamera);
 cameraSettingsButton.addEventListener("click", () => stopCamera({ settings: true }));
 galleryCameraButton.addEventListener("click", startCamera);

@@ -156,8 +156,8 @@ button:disabled {
 .mobile-gallery__grid {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 0;
+  gap: 0.85rem;
+  padding: 0.85rem;
 }
 
 .mobile-gallery__item {
@@ -168,6 +168,7 @@ button:disabled {
 }
 
 .mobile-gallery__item img {
+  border-radius: 10px;
   display: block;
   height: auto;
   width: 100%;
@@ -256,6 +257,11 @@ button:disabled {
   display: none;
 }
 
+.camera-preview-hit,
+.camera-flash {
+  display: none;
+}
+
 .camera-shell__top {
   display: flex;
   justify-content: flex-end;
@@ -323,12 +329,16 @@ button:disabled {
 }
 
 .camera-body-shutter {
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
   background: transparent;
   border: 0;
   border-radius: 999px;
+  color: transparent;
   height: 9.5%;
   left: 72.5%;
   min-height: 0;
+  outline: none;
   padding: 0;
   pointer-events: auto;
   position: absolute;
@@ -337,8 +347,13 @@ button:disabled {
   z-index: 4;
 }
 
-.camera-body-shutter:hover {
-  background: rgba(255, 255, 255, 0.08);
+.camera-body-shutter:hover,
+.camera-body-shutter:focus,
+.camera-body-shutter:active,
+.camera-body-shutter:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  outline: none;
   transform: none;
 }
 
@@ -740,6 +755,45 @@ h1 {
     z-index: 1;
   }
 
+  body.camera-mode-active .camera-preview-hit {
+    -webkit-tap-highlight-color: transparent;
+    appearance: none;
+    background: transparent;
+    border: 0;
+    display: block;
+    inset: 0;
+    min-height: 0;
+    outline: none;
+    padding: 0;
+    pointer-events: auto;
+    position: absolute;
+    z-index: 5;
+  }
+
+  body.camera-mode-active .camera-preview-hit:hover,
+  body.camera-mode-active .camera-preview-hit:focus,
+  body.camera-mode-active .camera-preview-hit:active,
+  body.camera-mode-active .camera-preview-hit:focus-visible {
+    background: transparent;
+    box-shadow: none;
+    outline: none;
+    transform: none;
+  }
+
+  body.camera-mode-active .camera-flash {
+    background: #fff;
+    display: block;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 6;
+  }
+
+  body.camera-mode-active .camera-flash.is-active {
+    animation: camera-flash 260ms ease-out;
+  }
+
   body.camera-mode-active #processedCanvas {
     height: 100% !important;
     max-height: none !important;
@@ -750,6 +804,20 @@ h1 {
 
   body.camera-mode-active .camera-shell__hud {
     padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+@keyframes camera-flash {
+  0% {
+    opacity: 0;
+  }
+
+  22% {
+    opacity: 0.92;
+  }
+
+  100% {
+    opacity: 0;
   }
 }
 

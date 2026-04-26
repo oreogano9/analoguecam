@@ -140,6 +140,7 @@ const state = {
   },
   cameraSwipe: {
     active: false,
+    pointerId: null,
     startY: 0,
     distance: 0,
   },
@@ -1077,17 +1078,8 @@ function renderGallery() {
     image.src = url;
     image.alt = "Local analogue shot";
 
-    const meta = document.createElement("div");
-    meta.className = "mobile-gallery__meta";
-    meta.textContent = new Date(item.createdAt).toLocaleString([], {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
     button.append(image);
-    card.append(button, meta);
+    card.append(button);
     galleryGrid.append(card);
   }
 }
@@ -1703,28 +1695,20 @@ function handleCameraSwipeStart(event) {
     return;
   }
 
-  const touch = event.touches?.[0];
-  if (!touch) {
-    return;
-  }
-
   state.cameraSwipe.active = true;
-  state.cameraSwipe.startY = touch.clientY;
+  state.cameraSwipe.pointerId = event.pointerId;
+  state.cameraSwipe.startY = event.clientY;
   state.cameraSwipe.distance = 0;
   workspace.style.transition = "none";
+  cameraShell.setPointerCapture(event.pointerId);
 }
 
 function handleCameraSwipeMove(event) {
-  if (!state.cameraSwipe.active) {
+  if (!state.cameraSwipe.active || event.pointerId !== state.cameraSwipe.pointerId) {
     return;
   }
 
-  const touch = event.touches?.[0];
-  if (!touch) {
-    return;
-  }
-
-  const distance = Math.max(0, state.cameraSwipe.startY - touch.clientY);
+  const distance = Math.max(0, state.cameraSwipe.startY - event.clientY);
   state.cameraSwipe.distance = distance;
   if (distance > 8) {
     event.preventDefault();
@@ -1734,13 +1718,17 @@ function handleCameraSwipeMove(event) {
   workspace.style.transform = `translateY(${-eased}px)`;
 }
 
-function handleCameraSwipeEnd() {
-  if (!state.cameraSwipe.active) {
+function handleCameraSwipeEnd(event) {
+  if (!state.cameraSwipe.active || event.pointerId !== state.cameraSwipe.pointerId) {
     return;
   }
 
   const shouldOpenGallery = state.cameraSwipe.distance > Math.min(140, window.innerHeight * 0.18);
   state.cameraSwipe.active = false;
+  state.cameraSwipe.pointerId = null;
+  if (cameraShell.hasPointerCapture(event.pointerId)) {
+    cameraShell.releasePointerCapture(event.pointerId);
+  }
   workspace.style.transition = "transform 220ms ease";
 
   if (shouldOpenGallery) {
@@ -2184,10 +2172,10 @@ toggleEditsButton.addEventListener("click", toggleEditsVisibility);
 downloadButton.addEventListener("click", downloadImage);
 window.addEventListener("resize", updateCanvasDisplaySize);
 window.addEventListener("pagehide", stopCamera);
-cameraShell.addEventListener("touchstart", handleCameraSwipeStart, { passive: true });
-cameraShell.addEventListener("touchmove", handleCameraSwipeMove, { passive: false });
-cameraShell.addEventListener("touchend", handleCameraSwipeEnd);
-cameraShell.addEventListener("touchcancel", handleCameraSwipeEnd);
+cameraShell.addEventListener("pointerdown", handleCameraSwipeStart);
+cameraShell.addEventListener("pointermove", handleCameraSwipeMove);
+cameraShell.addEventListener("pointerup", handleCameraSwipeEnd);
+cameraShell.addEventListener("pointercancel", handleCameraSwipeEnd);
 workspace.addEventListener("wheel", handleWorkspaceWheel, { passive: false });
 canvas.addEventListener("pointerdown", startCanvasPan);
 canvas.addEventListener("pointermove", moveCanvasPan);

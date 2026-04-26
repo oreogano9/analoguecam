@@ -154,23 +154,22 @@ button:disabled {
 }
 
 .mobile-gallery__grid {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
 }
 
 .mobile-gallery__item {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   overflow: hidden;
 }
 
 .mobile-gallery__item img {
-  aspect-ratio: 3 / 4;
   display: block;
-  object-fit: cover;
+  height: auto;
   width: 100%;
 }
 
@@ -187,14 +186,6 @@ button:disabled {
 .mobile-gallery__item button:hover {
   background: transparent;
   transform: none;
-}
-
-.mobile-gallery__meta {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-  padding: 0.55rem;
-  text-transform: uppercase;
 }
 
 .gallery-viewer {
@@ -707,6 +698,7 @@ h1 {
     min-height: 100svh;
     padding: 0;
     position: fixed;
+    touch-action: none;
     width: 100vw;
     z-index: 20;
   }

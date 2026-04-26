@@ -258,7 +258,8 @@ button:disabled {
 }
 
 .camera-preview-hit,
-.camera-flash {
+.camera-flash,
+.camera-flash-tint {
   display: none;
 }
 
@@ -335,22 +336,45 @@ button:disabled {
   border: 0;
   border-radius: 999px;
   color: transparent;
-  height: 9.5%;
-  left: 72.5%;
+  height: 10.2%;
+  left: 6.3%;
   min-height: 0;
   outline: none;
   padding: 0;
   pointer-events: auto;
   position: absolute;
-  top: 78.6%;
-  width: 18%;
+  top: 2.1%;
+  width: 19.5%;
+  z-index: 4;
+}
+
+.camera-flash-toggle {
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: transparent;
+  height: 9.6%;
+  left: 41.5%;
+  min-height: 0;
+  outline: none;
+  padding: 0;
+  pointer-events: auto;
+  position: absolute;
+  top: 41.0%;
+  width: 20.5%;
   z-index: 4;
 }
 
 .camera-body-shutter:hover,
 .camera-body-shutter:focus,
 .camera-body-shutter:active,
-.camera-body-shutter:focus-visible {
+.camera-body-shutter:focus-visible,
+.camera-flash-toggle:hover,
+.camera-flash-toggle:focus,
+.camera-flash-toggle:active,
+.camera-flash-toggle:focus-visible {
   background: transparent;
   box-shadow: none;
   outline: none;
@@ -745,13 +769,13 @@ h1 {
 
   body.camera-mode-active .camera-preview-slot {
     display: block;
-    height: 24.9%;
-    left: 29.2%;
+    height: 14.6%;
+    left: 44.3%;
     overflow: hidden;
     pointer-events: none;
     position: absolute;
-    top: 26.0%;
-    width: 43.5%;
+    top: 23.1%;
+    width: 14.9%;
     z-index: 1;
   }
 
@@ -788,6 +812,20 @@ h1 {
     pointer-events: none;
     position: absolute;
     z-index: 6;
+  }
+
+  body.camera-mode-active .camera-flash-tint {
+    background: #fff;
+    display: block;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 4;
+  }
+
+  body.camera-mode-active .camera-flash-tint.is-visible {
+    opacity: 0.2;
   }
 
   body.camera-mode-active .camera-flash.is-active {

@@ -9,6 +9,8 @@ const cameraPreview = document.querySelector("#cameraPreview");
 const cameraPreviewSlot = document.querySelector("#cameraPreviewSlot");
 const cameraPreviewGalleryButton = document.querySelector("#cameraPreviewGalleryButton");
 const cameraFlash = document.querySelector("#cameraFlash");
+const cameraFlashTint = document.querySelector("#cameraFlashTint");
+const cameraFlashToggleButton = document.querySelector("#cameraFlashToggleButton");
 const cameraPresetLabel = document.querySelector("#cameraPresetLabel");
 const cameraLookSelect = document.querySelector("#cameraLookSelect");
 const fileInput = document.querySelector("#fileInput");
@@ -112,6 +114,7 @@ const state = {
   cameraActive: false,
   cameraAnimationFrame: 0,
   cameraAutostartAttempted: false,
+  cameraFlashEnabled: false,
   mobileSettingsOpen: false,
   galleryDb: null,
   galleryItems: [],
@@ -786,6 +789,8 @@ function updateMobileCameraState() {
   startCameraButton.disabled = !canOpen;
   capturePhotoButton.disabled = !mobile || !state.cameraActive;
   cameraCaptureButton.disabled = !mobile || !state.cameraActive;
+  cameraPreviewGalleryButton.disabled = !mobile || !state.cameraActive;
+  cameraFlashToggleButton.disabled = !mobile || !state.cameraActive;
   stopCameraButton.disabled = !mobile || !state.cameraActive;
   cameraSettingsButton.disabled = !mobile || !state.cameraActive;
   cameraLookSelect.disabled = !mobile || lookSelect.disabled;
@@ -796,6 +801,7 @@ function updateMobileCameraState() {
   document.body.classList.toggle("camera-mode-active", mobile && state.cameraActive);
   document.body.classList.toggle("mobile-gallery-active", mobile && !state.cameraActive && !state.mobileSettingsOpen);
   document.body.classList.toggle("mobile-settings-active", mobile && !state.cameraActive && state.mobileSettingsOpen);
+  updateCameraFlashState();
 }
 
 function queueMobileCameraAutostart() {
@@ -1001,6 +1007,16 @@ function flashCameraPreview() {
   cameraFlash.classList.remove("is-active");
   void cameraFlash.offsetWidth;
   cameraFlash.classList.add("is-active");
+}
+
+function updateCameraFlashState() {
+  cameraFlashTint.classList.toggle("is-visible", state.cameraFlashEnabled);
+  cameraFlashToggleButton.setAttribute("aria-pressed", String(state.cameraFlashEnabled));
+}
+
+function toggleCameraFlash() {
+  state.cameraFlashEnabled = !state.cameraFlashEnabled;
+  updateCameraFlashState();
 }
 
 function openGalleryDb() {
@@ -1878,6 +1894,7 @@ function disableControls(message) {
   capturePhotoButton.disabled = true;
   cameraCaptureButton.disabled = true;
   cameraPreviewGalleryButton.disabled = true;
+  cameraFlashToggleButton.disabled = true;
   stopCameraButton.disabled = true;
   cameraSettingsButton.disabled = true;
   galleryCameraButton.disabled = true;
@@ -2091,6 +2108,7 @@ capturePhotoButton.addEventListener("click", handleCameraCaptureClick);
 cameraCaptureButton.addEventListener("click", handleCameraCaptureClick);
 cameraCaptureButton.addEventListener("pointerdown", vibrateCapture);
 cameraPreviewGalleryButton.addEventListener("click", () => stopCamera());
+cameraFlashToggleButton.addEventListener("click", toggleCameraFlash);
 stopCameraButton.addEventListener("click", stopCamera);
 cameraSettingsButton.addEventListener("click", () => stopCamera({ settings: true }));
 galleryCameraButton.addEventListener("click", startCamera);

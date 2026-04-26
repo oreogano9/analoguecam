@@ -1704,13 +1704,33 @@ function compositeCameraStackOverlays(context, cameraOverlays) {
   for (const effect of filter.filters ?? []) {
     const type = String(effect.type ?? "").toLowerCase();
     if (type === "frame") {
-      drawOverlayList(context, cameraOverlays.frame, effect, "source-over");
+      drawFrameOverlayList(context, cameraOverlays.frame, effect);
     } else if (type === "blend") {
       drawOverlayList(context, cameraOverlays.blend, effect, blendModeFromCameraEffect(effect));
     } else if (type === "water") {
       drawOverlayList(context, cameraOverlays.water, effect, "screen");
     }
   }
+}
+
+function drawFrameOverlayList(context, images, effect) {
+  if (!images?.length) {
+    return;
+  }
+
+  const value = Number(effect.value ?? effect.params?.v ?? 10);
+  const alpha = Number.isFinite(value) ? Math.min(1, Math.max(0, value / 10)) : 1;
+  const image = pickOverlayImage(images, stableOverlayIndex(effect.raw, images.length));
+  const region = parseFrameRegion(effect.params?.region);
+
+  if (!region) {
+    drawOverlay(context, image, alpha, "source-over", {
+      tiled: effect.params?.fillmode === "tiled",
+    });
+    return;
+  }
+
+  drawRegionFrameOverlay(context, image, alpha, region);
 }
 
 function drawOverlayList(context, images, effect, blendMode) {
@@ -1724,6 +1744,85 @@ function drawOverlayList(context, images, effect, blendMode) {
   drawOverlay(context, image, alpha, blendMode, {
     tiled: effect.params?.fillmode === "tiled",
   });
+}
+
+function parseFrameRegion(regionValue) {
+  const values = String(regionValue ?? "")
+    .split("|")
+    .map((value) => Number(value));
+  if (values.length !== 6 || values.some((value) => !Number.isFinite(value) || value < 0)) {
+    return null;
+  }
+
+  const [sourceWidth, left, top, sourceHeight, right, bottom] = values;
+  if (!sourceWidth || !sourceHeight || left + right >= sourceWidth || top + bottom >= sourceHeight) {
+    return null;
+  }
+
+  return {
+    left: left / sourceWidth,
+    top: top / sourceHeight,
+    width: (sourceWidth - left - right) / sourceWidth,
+    height: (sourceHeight - top - bottom) / sourceHeight,
+  };
+}
+
+function drawRegionFrameOverlay(context, image, alpha, region) {
+  if (!image || alpha <= 0) {
+    return;
+  }
+
+  const width = context.canvas.width;
+  const height = context.canvas.height;
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = width;
+  sourceCanvas.height = height;
+  const sourceContext = sourceCanvas.getContext("2d");
+  if (!sourceContext) {
+    return;
+  }
+
+  sourceContext.drawImage(context.canvas, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  const target = {
+    x: region.left * width,
+    y: region.top * height,
+    width: region.width * width,
+    height: region.height * height,
+  };
+  drawImageCover(context, sourceCanvas, target.x, target.y, target.width, target.height);
+
+  context.save();
+  context.globalAlpha = alpha;
+  context.globalCompositeOperation = "source-over";
+  context.drawImage(image, 0, 0, width, height);
+  context.restore();
+}
+
+function drawImageCover(context, image, x, y, width, height) {
+  const sourceWidth = image.videoWidth || image.naturalWidth || image.width;
+  const sourceHeight = image.videoHeight || image.naturalHeight || image.height;
+  if (!sourceWidth || !sourceHeight || width <= 0 || height <= 0) {
+    return;
+  }
+
+  const sourceRatio = sourceWidth / sourceHeight;
+  const targetRatio = width / height;
+  let cropWidth = sourceWidth;
+  let cropHeight = sourceHeight;
+  let cropX = 0;
+  let cropY = 0;
+
+  if (sourceRatio > targetRatio) {
+    cropWidth = sourceHeight * targetRatio;
+    cropX = (sourceWidth - cropWidth) / 2;
+  } else {
+    cropHeight = sourceWidth / targetRatio;
+    cropY = (sourceHeight - cropHeight) / 2;
+  }
+
+  context.drawImage(image, cropX, cropY, cropWidth, cropHeight, x, y, width, height);
 }
 
 function pickOverlayImage(images, index = 0) {

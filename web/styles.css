@@ -476,6 +476,10 @@ h1 {
   display: none;
 }
 
+.settings-gallery-button {
+  display: none;
+}
+
 .mobile-camera-panel__actions {
   display: grid;
   gap: 0.75rem;
@@ -662,6 +666,11 @@ h1 {
     border-left: 0;
     min-height: auto;
     padding-inline: 1rem;
+  }
+
+  .settings-gallery-button {
+    display: block;
+    width: 100%;
   }
 
   .mobile-camera-panel {

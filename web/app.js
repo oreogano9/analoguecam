@@ -24,6 +24,7 @@ const galleryViewer = document.querySelector("#galleryViewer");
 const galleryViewerImage = document.querySelector("#galleryViewerImage");
 const gallerySaveButton = document.querySelector("#gallerySaveButton");
 const galleryCloseButton = document.querySelector("#galleryCloseButton");
+const settingsGalleryButton = document.querySelector("#settingsGalleryButton");
 const startCameraButton = document.querySelector("#startCameraButton");
 const capturePhotoButton = document.querySelector("#capturePhotoButton");
 const cameraCaptureButton = document.querySelector("#cameraCaptureButton");
@@ -1873,6 +1874,7 @@ function disableControls(message) {
   gallerySettingsButton.disabled = true;
   gallerySaveButton.disabled = true;
   galleryCloseButton.disabled = true;
+  settingsGalleryButton.disabled = true;
   resetButton.disabled = true;
   toggleEditsButton.disabled = true;
   downloadButton.disabled = true;
@@ -2083,6 +2085,10 @@ cameraSettingsButton.addEventListener("click", () => stopCamera({ settings: true
 galleryCameraButton.addEventListener("click", startCamera);
 gallerySettingsButton.addEventListener("click", () => {
   state.mobileSettingsOpen = true;
+  updateMobileCameraState();
+});
+settingsGalleryButton.addEventListener("click", () => {
+  state.mobileSettingsOpen = false;
   updateMobileCameraState();
 });
 galleryCloseButton.addEventListener("click", closeGalleryItem);

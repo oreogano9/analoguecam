@@ -15,6 +15,9 @@
         </div>
         <div class="camera-shell" id="cameraShell" hidden>
           <video id="cameraPreview" autoplay playsinline muted></video>
+          <div class="camera-shell__top">
+            <button id="cameraSettingsButton" type="button">Settings</button>
+          </div>
           <div class="camera-shell__hud">
             <label class="camera-filter-control">
               <span>Filter</span>
@@ -22,6 +25,7 @@
             </label>
             <p id="cameraPresetLabel">Live filtered preview.</p>
           </div>
+          <button class="camera-shutter" id="cameraCaptureButton" type="button" aria-label="Take photo"></button>
         </div>
         <canvas id="processedCanvas"></canvas>
       </section>

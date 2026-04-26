@@ -16,7 +16,9 @@ const effectsRoot = document.querySelector("#effectsRoot");
 const importedEffectsRoot = document.querySelector("#importedEffectsRoot");
 const startCameraButton = document.querySelector("#startCameraButton");
 const capturePhotoButton = document.querySelector("#capturePhotoButton");
+const cameraCaptureButton = document.querySelector("#cameraCaptureButton");
 const stopCameraButton = document.querySelector("#stopCameraButton");
+const cameraSettingsButton = document.querySelector("#cameraSettingsButton");
 const resetButton = document.querySelector("#resetButton");
 const toggleEditsButton = document.querySelector("#toggleEditsButton");
 const downloadButton = document.querySelector("#downloadButton");
@@ -93,6 +95,7 @@ const state = {
   cameraStream: null,
   cameraActive: false,
   cameraAnimationFrame: 0,
+  cameraAutostartAttempted: false,
   nomoOverlayImages: null,
   overlaySelections: {
     dust: 0,
@@ -350,6 +353,7 @@ async function initializeApp() {
   syncIntensityControlState();
   updateEffectControlState();
   updateMobileCameraState();
+  queueMobileCameraAutostart();
   setStatus("Open a photo to start.");
 }
 
@@ -712,6 +716,9 @@ function handleMobileViewportChange(event) {
   if (!event.matches && state.cameraActive) {
     stopCamera();
   }
+  if (event.matches) {
+    queueMobileCameraAutostart();
+  }
   updateMobileCameraState();
 }
 
@@ -726,16 +733,36 @@ function updateMobileCameraState() {
 
   startCameraButton.disabled = !canOpen;
   capturePhotoButton.disabled = !mobile || !state.cameraActive;
+  cameraCaptureButton.disabled = !mobile || !state.cameraActive;
   stopCameraButton.disabled = !mobile || !state.cameraActive;
+  cameraSettingsButton.disabled = !mobile || !state.cameraActive;
   cameraLookSelect.disabled = !mobile || lookSelect.disabled;
   cameraLookSelect.value = lookSelect.value;
   cameraPresetLabel.textContent = state.cameraActive
     ? `Live preview: ${state.filterMap.get(lookSelect.value)?.name ?? "selected preset"}`
     : "Ready to capture with the selected preset.";
+  document.body.classList.toggle("camera-mode-active", mobile && state.cameraActive);
+}
+
+function queueMobileCameraAutostart() {
+  if (!isMobileView() || state.cameraAutostartAttempted || lookSelect.disabled) {
+    return;
+  }
+
+  state.cameraAutostartAttempted = true;
+  window.setTimeout(() => {
+    if (isMobileView() && !state.cameraActive) {
+      startCamera();
+    }
+  }, 0);
 }
 
 async function startCamera() {
   if (!isMobileView()) {
+    return;
+  }
+
+  if (state.cameraActive) {
     return;
   }
 
@@ -1548,7 +1575,9 @@ function disableControls(message) {
   intensitySlider.disabled = true;
   startCameraButton.disabled = true;
   capturePhotoButton.disabled = true;
+  cameraCaptureButton.disabled = true;
   stopCameraButton.disabled = true;
+  cameraSettingsButton.disabled = true;
   resetButton.disabled = true;
   toggleEditsButton.disabled = true;
   downloadButton.disabled = true;
@@ -1743,13 +1772,17 @@ function generateCustomLut(recipeName) {
 
 fileInput.addEventListener("change", (event) => loadFile(event.target.files[0]));
 startCameraButton.addEventListener("click", startCamera);
-capturePhotoButton.addEventListener("click", () => {
+function handleCameraCaptureClick() {
   captureCameraFrame().catch((error) => {
     console.error(error);
     setStatus("Failed to capture the camera frame.");
   });
-});
+}
+
+capturePhotoButton.addEventListener("click", handleCameraCaptureClick);
+cameraCaptureButton.addEventListener("click", handleCameraCaptureClick);
 stopCameraButton.addEventListener("click", stopCamera);
+cameraSettingsButton.addEventListener("click", stopCamera);
 
 lookSelect.addEventListener("change", async () => {
   handleFilterSelection(lookSelect.value);

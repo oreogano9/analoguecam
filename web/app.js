@@ -114,6 +114,8 @@ const state = {
   galleryItems: [],
   galleryObjectUrls: [],
   selectedGalleryItem: null,
+  cameraSaveQueue: [],
+  cameraSaveProcessing: false,
   nomoOverlayImages: null,
   cameraOverlayCache: new Map(),
   currentCameraOverlayImages: null,
@@ -1049,7 +1051,6 @@ async function renderLiveCameraFrame() {
   if (cameraPreview.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && cameraPreview.videoWidth && cameraPreview.videoHeight) {
     try {
       await ensureLutTexture(lookSelect.value);
-      await ensureCameraOverlayImages(lookSelect.value);
       if (!state.cameraActive) {
         return;
       }
@@ -1109,39 +1110,185 @@ async function saveCurrentCameraFrame() {
   vibrateCapture();
   flashCameraPreview();
 
-  stopLiveCameraRender();
-  state.source = cameraPreview;
-  state.sourceName = "mobile-live-preview";
-  state.sourceResolution = {
-    width: cameraPreview.videoWidth,
-    height: cameraPreview.videoHeight,
-  };
-  fitCanvasToSize(cameraPreview.videoWidth, cameraPreview.videoHeight, Math.max(cameraPreview.videoWidth, cameraPreview.videoHeight));
-  uploadSourceTexturePixels(cameraPreview);
-  await ensureCameraOverlayImages(lookSelect.value);
-  renderImage({ includeSpektraGrain: true });
-
   const selected = state.filterMap.get(lookSelect.value);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", JPEG_EXPORT_QUALITY));
-  if (state.cameraActive) {
-    startLiveCameraRender();
-  }
-  if (!blob) {
+  const rawBlob = await captureRawCameraBlob();
+  if (!rawBlob) {
     setStatus("Failed to save the camera frame.");
     return;
   }
 
   const filename = `analoguecam-${selected?.filename ?? "camera"}-${Date.now()}.jpg`;
-  const galleryReady = await ensureGalleryReady();
-  if (!galleryReady) {
-    setStatus("Local gallery storage is unavailable in this browser.");
+  enqueueCameraSave({
+    rawBlob,
+    filename,
+    filterFilename: lookSelect.value,
+    intensity: intensitySlider.value,
+    effects: cloneEffectsState(state.effects),
+    importedEffects: cloneImportedEffectsState(state.importedEffects),
+  });
+  setStatus(`Captured ${selected?.name ?? "camera"} frame. Processing save in background.`);
+}
+
+async function captureRawCameraBlob() {
+  if (!cameraPreview.videoWidth || !cameraPreview.videoHeight) {
+    return null;
+  }
+
+  const captureCanvas = document.createElement("canvas");
+  captureCanvas.width = cameraPreview.videoWidth;
+  captureCanvas.height = cameraPreview.videoHeight;
+  const context = captureCanvas.getContext("2d");
+  if (!context) {
+    return null;
+  }
+
+  context.drawImage(cameraPreview, 0, 0, captureCanvas.width, captureCanvas.height);
+  return new Promise((resolve) => captureCanvas.toBlob(resolve, "image/jpeg", JPEG_EXPORT_QUALITY));
+}
+
+function enqueueCameraSave(job) {
+  state.cameraSaveQueue.push(job);
+  if (!state.cameraSaveProcessing) {
+    state.cameraSaveProcessing = true;
+    scheduleSlowCameraSaveProcessing();
+  }
+}
+
+function scheduleSlowCameraSaveProcessing() {
+  window.setTimeout(() => {
+    processNextCameraSave().catch((error) => {
+      console.error(error);
+      setStatus("Failed to process queued camera save.");
+      state.cameraSaveProcessing = false;
+    });
+  }, 650);
+}
+
+async function processNextCameraSave() {
+  const job = state.cameraSaveQueue.shift();
+  if (!job) {
+    state.cameraSaveProcessing = false;
     return;
   }
 
-  const item = await saveGalleryBlob(blob, filename);
-  state.galleryItems.unshift(item);
-  renderGallery();
-  setStatus("Saved current camera frame to local gallery.");
+  const galleryReady = await ensureGalleryReady();
+  if (!galleryReady) {
+    setStatus("Local gallery storage is unavailable in this browser.");
+    state.cameraSaveProcessing = false;
+    return;
+  }
+
+  const previous = snapshotRenderState();
+  try {
+    const image = await decodeBlobToImage(job.rawBlob);
+    stopLiveCameraRender();
+    lookSelect.value = job.filterFilename;
+    cameraLookSelect.value = job.filterFilename;
+    intensitySlider.value = job.intensity;
+    state.effects = cloneEffectsState(job.effects);
+    state.importedEffects = cloneImportedEffectsState(job.importedEffects);
+    state.source = image;
+    state.sourceName = "queued-camera-save";
+    state.sourceResolution = { width: image.naturalWidth, height: image.naturalHeight };
+    fitCanvasToSize(image.naturalWidth, image.naturalHeight, Math.max(image.naturalWidth, image.naturalHeight));
+    uploadSourceTexturePixels(image);
+    await ensureLutTexture(job.filterFilename);
+    await ensureCameraOverlayImages(job.filterFilename);
+    renderImage({ includeSpektraGrain: true, includeNomoOverlays: true, includeCameraStack: true });
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", JPEG_EXPORT_QUALITY));
+    if (!blob) {
+      throw new Error("Processed camera save did not produce a blob.");
+    }
+
+    const item = await saveGalleryBlob(blob, job.filename);
+    state.galleryItems.unshift(item);
+    renderGallery();
+    setStatus(`Saved ${state.filterMap.get(job.filterFilename)?.name ?? "camera"} shot to local gallery.`);
+  } finally {
+    restoreRenderState(previous);
+  }
+
+  if (state.cameraSaveQueue.length) {
+    scheduleSlowCameraSaveProcessing();
+  } else {
+    state.cameraSaveProcessing = false;
+  }
+}
+
+function snapshotRenderState() {
+  return {
+    source: state.source,
+    sourceName: state.sourceName,
+    sourceResolution: { ...state.sourceResolution },
+    filterFilename: lookSelect.value,
+    intensity: intensitySlider.value,
+    effects: cloneEffectsState(state.effects),
+    importedEffects: cloneImportedEffectsState(state.importedEffects),
+    currentCameraOverlayImages: state.currentCameraOverlayImages,
+  };
+}
+
+function restoreRenderState(previous) {
+  lookSelect.value = previous.filterFilename;
+  cameraLookSelect.value = previous.filterFilename;
+  intensitySlider.value = previous.intensity;
+  state.effects = previous.effects;
+  state.importedEffects = previous.importedEffects;
+  state.currentCameraOverlayImages = previous.currentCameraOverlayImages;
+  syncIntensityControlState();
+  updateEffectControlState();
+  syncEffectInputs();
+  syncImportedEffectInputs();
+
+  if (state.cameraActive && cameraPreview.videoWidth && cameraPreview.videoHeight) {
+    state.source = cameraPreview;
+    state.sourceName = "mobile-live-preview";
+    state.sourceResolution = {
+      width: cameraPreview.videoWidth,
+      height: cameraPreview.videoHeight,
+    };
+    fitCanvasToSize(cameraPreview.videoWidth, cameraPreview.videoHeight, CAMERA_PREVIEW_MAX_SIDE);
+    uploadSourceTexturePixels(cameraPreview);
+    startLiveCameraRender();
+    return;
+  }
+
+  state.source = previous.source;
+  state.sourceName = previous.sourceName;
+  state.sourceResolution = previous.sourceResolution;
+  if (state.source instanceof HTMLImageElement) {
+    uploadSourceTexture(state.source);
+    renderImage();
+  }
+}
+
+function cloneEffectsState(effects) {
+  return Object.fromEntries(Object.entries(effects).map(([id, effect]) => [id, { ...effect }]));
+}
+
+function cloneImportedEffectsState(importedEffects) {
+  return {
+    spektraGrain: {
+      ...importedEffects.spektraGrain,
+    },
+  };
+}
+
+function decodeBlobToImage(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to decode queued camera frame."));
+    };
+    image.src = url;
+  });
 }
 
 function vibrateCapture() {
@@ -1613,8 +1760,10 @@ function renderPostEffectsStage(options = {}) {
 
   let output = rgba;
 
-  if (hasNomoOverlayEffects()) {
-    output = compositeNomoOverlays(output);
+  const includeNomoOverlays = options.includeNomoOverlays ?? !state.cameraActive;
+  const includeCameraStack = options.includeCameraStack ?? includeNomoOverlays;
+  if (includeNomoOverlays && hasNomoOverlayEffects({ includeCameraStack })) {
+    output = compositeNomoOverlays(output, { includeCameraStack });
   }
 
   const includeSpektraGrain = options.includeSpektraGrain ?? !state.cameraActive;
@@ -1650,7 +1799,8 @@ function uploadGrainTexture(rgba) {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
 }
 
-function hasNomoOverlayEffects() {
+function hasNomoOverlayEffects(options = {}) {
+  const includeCameraStack = options.includeCameraStack ?? true;
   const filter = state.filterMap.get(lookSelect.value);
   const cameraOverlayAssets = filter?.overlayAssets ?? {};
   return (
@@ -1658,11 +1808,11 @@ function hasNomoOverlayEffects() {
     state.effects.dust?.value > 0 ||
     state.effects.lightLeak?.value > 0 ||
     state.effects.vignette?.value > 0 ||
-    Boolean(cameraOverlayAssets.frame?.length || cameraOverlayAssets.blend?.length || cameraOverlayAssets.water?.length)
+    (includeCameraStack && Boolean(cameraOverlayAssets.frame?.length || cameraOverlayAssets.blend?.length || cameraOverlayAssets.water?.length))
   );
 }
 
-function compositeNomoOverlays(rgba) {
+function compositeNomoOverlays(rgba, options = {}) {
   const baseCanvas = createCompositeCanvas(rgba);
   const context = baseCanvas.getContext("2d");
   const cameraOverlays = state.currentCameraOverlayImages;
@@ -1691,7 +1841,9 @@ function compositeNomoOverlays(rgba) {
     drawOverlay(context, vignetteImage ?? state.nomoOverlayImages?.vignette, state.effects.vignette.value / 10, "multiply", { flipXY: true });
   }
 
-  compositeCameraStackOverlays(context, cameraOverlays);
+  if (options.includeCameraStack ?? true) {
+    compositeCameraStackOverlays(context, cameraOverlays);
+  }
 
   return new Uint8Array(context.getImageData(0, 0, baseCanvas.width, baseCanvas.height).data);
 }
@@ -2269,7 +2421,9 @@ async function selectFilter(filename) {
   }
 
   await ensureLutTexture(filename);
-  await ensureCameraOverlayImages(filename);
+  if (!state.cameraActive) {
+    await ensureCameraOverlayImages(filename);
+  }
   renderImageAfterSettingsChange();
   setStatus(`${state.filterMap.get(filename)?.name ?? filename} loaded.`);
 }

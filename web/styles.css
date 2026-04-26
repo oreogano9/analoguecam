@@ -329,6 +329,10 @@ button:disabled {
   width: 100%;
 }
 
+.camera-list-drawer {
+  display: none;
+}
+
 .camera-body-shutter {
   -webkit-tap-highlight-color: transparent;
   appearance: none;
@@ -851,6 +855,78 @@ h1 {
 
   body.camera-mode-active .camera-shell__hud {
     padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
+
+  body.camera-mode-active .camera-list-drawer {
+    background: rgba(14, 16, 13, 0.92);
+    border-right: 1px solid rgba(255, 248, 235, 0.16);
+    box-shadow: 18px 0 42px rgba(0, 0, 0, 0.32);
+    color: #fff8eb;
+    display: flex;
+    flex-direction: column;
+    height: 100svh;
+    left: 0;
+    max-width: 84vw;
+    padding: calc(env(safe-area-inset-top) + 1rem) 0 calc(env(safe-area-inset-bottom) + 1rem);
+    pointer-events: auto;
+    position: fixed;
+    top: 0;
+    transform: translateX(-102%);
+    transition: transform 220ms ease;
+    width: min(22rem, 84vw);
+    z-index: 30;
+  }
+
+  body.camera-mode-active.camera-list-open .camera-list-drawer {
+    transform: translateX(0);
+  }
+
+  .camera-list-drawer__header {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0 1rem 0.85rem;
+  }
+
+  .camera-list-drawer__header span {
+    font-size: 0.88rem;
+    font-weight: 950;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .camera-list-drawer__header small {
+    color: rgba(255, 248, 235, 0.58);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .camera-list {
+    display: grid;
+    gap: 0.35rem;
+    overflow: auto;
+    padding: 0 0.75rem;
+  }
+
+  .camera-list__item {
+    -webkit-tap-highlight-color: transparent;
+    background: rgba(255, 248, 235, 0.08);
+    border: 1px solid rgba(255, 248, 235, 0.1);
+    border-radius: 14px;
+    color: #fff8eb;
+    font-size: 1rem;
+    font-weight: 900;
+    justify-content: start;
+    min-height: 44px;
+    padding: 0.8rem 0.9rem;
+    text-align: left;
+    width: 100%;
+  }
+
+  .camera-list__item.is-selected {
+    background: #fff8eb;
+    color: #141511;
   }
 }
 

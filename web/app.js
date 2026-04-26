@@ -13,6 +13,8 @@ const cameraFlashTint = document.querySelector("#cameraFlashTint");
 const cameraFlashToggleButton = document.querySelector("#cameraFlashToggleButton");
 const cameraPresetLabel = document.querySelector("#cameraPresetLabel");
 const cameraLookSelect = document.querySelector("#cameraLookSelect");
+const cameraListDrawer = document.querySelector("#cameraListDrawer");
+const cameraList = document.querySelector("#cameraList");
 const fileInput = document.querySelector("#fileInput");
 const lookSelect = document.querySelector("#lookSelect");
 const intensitySlider = document.querySelector("#intensitySlider");
@@ -143,9 +145,13 @@ const state = {
   cameraSwipe: {
     active: false,
     pointerId: null,
+    startX: 0,
     startY: 0,
+    axis: null,
     distance: 0,
+    suppressNextListClick: false,
   },
+  cameraListOpen: false,
 };
 
 const defaults = {
@@ -469,6 +475,7 @@ async function loadFilterCatalog() {
 function populateFilterSelect(filters) {
   lookSelect.innerHTML = "";
   cameraLookSelect.innerHTML = "";
+  cameraList.innerHTML = "";
   const groups = new Map();
   const cameraGroups = new Map();
 
@@ -492,6 +499,21 @@ function populateFilterSelect(filters) {
 
     const cameraOption = option.cloneNode(true);
     cameraGroups.get(filter.group).append(cameraOption);
+
+    const cameraButton = document.createElement("button");
+    cameraButton.type = "button";
+    cameraButton.className = "camera-list__item";
+    cameraButton.dataset.filename = filter.filename;
+    cameraButton.textContent = filter.name;
+    cameraButton.addEventListener("click", () => {
+      if (state.cameraSwipe.suppressNextListClick) {
+        state.cameraSwipe.suppressNextListClick = false;
+        return;
+      }
+      handleFilterSelection(filter.filename);
+      setCameraListOpen(false);
+    });
+    cameraList.append(cameraButton);
   }
 
   lookSelect.disabled = filters.length === 0;
@@ -891,7 +913,9 @@ function updateMobileCameraState() {
   document.body.classList.toggle("mobile-settings-active", mobile && !state.cameraActive && state.mobileSettingsOpen);
   if (!mobile || !state.cameraActive) {
     setCameraGalleryPeek(false);
+    setCameraListOpen(false);
   }
+  syncCameraListSelection();
   updateCameraFlashState();
 }
 
@@ -1930,13 +1954,13 @@ function stopCanvasPan(event) {
 }
 
 function handleCameraSwipeStart(event) {
-  if (!beginCameraSwipe(event.clientY, event.pointerId, event.target, event.currentTarget)) {
+  if (!beginCameraSwipe(event.clientX, event.clientY, event.pointerId, event.target, event.currentTarget)) {
     return;
   }
 }
 
 function handleCameraSwipeMove(event) {
-  moveCameraSwipe(event.clientY, event.pointerId, event);
+  moveCameraSwipe(event.clientX, event.clientY, event.pointerId, event);
 }
 
 function handleCameraSwipeEnd(event) {
@@ -1944,24 +1968,44 @@ function handleCameraSwipeEnd(event) {
 }
 
 function isCameraSwipeBlockedTarget(target) {
-  return target instanceof Element && Boolean(target.closest("button, select, input, label"));
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  if (target.closest(".camera-list-drawer")) {
+    return false;
+  }
+  return Boolean(target.closest("button, select, input, label"));
 }
 
 function setCameraGalleryPeek(enabled) {
   document.body.classList.toggle("camera-gallery-peek", enabled);
 }
 
-function beginCameraSwipe(clientY, pointerId, target, captureTarget) {
+function setCameraListOpen(open) {
+  state.cameraListOpen = Boolean(open && state.cameraActive && isMobileView());
+  document.body.classList.toggle("camera-list-open", state.cameraListOpen);
+  cameraListDrawer.setAttribute("aria-hidden", String(!state.cameraListOpen));
+}
+
+function syncCameraListSelection() {
+  const selected = lookSelect.value;
+  for (const button of cameraList.querySelectorAll(".camera-list__item")) {
+    button.classList.toggle("is-selected", button.dataset.filename === selected);
+  }
+}
+
+function beginCameraSwipe(clientX, clientY, pointerId, target, captureTarget) {
   if (state.cameraSwipe.active || !state.cameraActive || !isMobileView() || isCameraSwipeBlockedTarget(target)) {
     return false;
   }
 
   state.cameraSwipe.active = true;
   state.cameraSwipe.pointerId = pointerId;
+  state.cameraSwipe.startX = clientX;
   state.cameraSwipe.startY = clientY;
+  state.cameraSwipe.axis = null;
   state.cameraSwipe.distance = 0;
   workspace.style.transition = "none";
-  setCameraGalleryPeek(true);
 
   if (captureTarget?.setPointerCapture && typeof pointerId === "number") {
     captureTarget.setPointerCapture(pointerId);
@@ -1970,12 +2014,35 @@ function beginCameraSwipe(clientY, pointerId, target, captureTarget) {
   return true;
 }
 
-function moveCameraSwipe(clientY, pointerId, event) {
+function moveCameraSwipe(clientX, clientY, pointerId, event) {
   if (!state.cameraSwipe.active || pointerId !== state.cameraSwipe.pointerId) {
     return;
   }
 
-  const distance = Math.max(0, state.cameraSwipe.startY - clientY);
+  const deltaX = clientX - state.cameraSwipe.startX;
+  const deltaY = clientY - state.cameraSwipe.startY;
+
+  if (!state.cameraSwipe.axis && Math.max(Math.abs(deltaX), Math.abs(deltaY)) > 10) {
+    state.cameraSwipe.axis = Math.abs(deltaX) > Math.abs(deltaY) * 1.2 ? "horizontal" : "vertical";
+    if (state.cameraSwipe.axis === "vertical") {
+      setCameraGalleryPeek(true);
+    }
+  }
+
+  if (state.cameraSwipe.axis === "horizontal") {
+    const distance = state.cameraListOpen ? Math.max(0, -deltaX) : Math.max(0, deltaX);
+    state.cameraSwipe.distance = distance;
+    if (distance > 8) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (state.cameraSwipe.axis !== "vertical") {
+    return;
+  }
+
+  const distance = Math.max(0, -deltaY);
   state.cameraSwipe.distance = distance;
   if (distance > 8) {
     event.preventDefault();
@@ -1990,15 +2057,29 @@ function endCameraSwipe(pointerId, captureTarget) {
     return;
   }
 
-  const shouldOpenGallery = state.cameraSwipe.distance > Math.min(140, window.innerHeight * 0.18);
+  const axis = state.cameraSwipe.axis;
+  const shouldOpenCameraList = axis === "horizontal" && !state.cameraListOpen && state.cameraSwipe.distance > Math.min(90, window.innerWidth * 0.22);
+  const shouldCloseCameraList = axis === "horizontal" && state.cameraListOpen && state.cameraSwipe.distance > Math.min(90, window.innerWidth * 0.22);
+  const shouldOpenGallery = axis === "vertical" && state.cameraSwipe.distance > Math.min(140, window.innerHeight * 0.18);
   state.cameraSwipe.active = false;
   state.cameraSwipe.pointerId = null;
+  state.cameraSwipe.axis = null;
   if (captureTarget?.hasPointerCapture?.(pointerId)) {
     captureTarget.releasePointerCapture(pointerId);
   }
   workspace.style.transition = "transform 220ms ease";
 
+  if (shouldOpenCameraList || shouldCloseCameraList) {
+    state.cameraSwipe.suppressNextListClick = shouldCloseCameraList && state.cameraSwipe.distance > 8;
+    setCameraListOpen(shouldOpenCameraList);
+    workspace.style.transition = "";
+    workspace.style.transform = "";
+    setCameraGalleryPeek(false);
+    return;
+  }
+
   if (shouldOpenGallery) {
+    setCameraListOpen(false);
     workspace.style.transform = "translateY(-100svh)";
     window.setTimeout(() => {
       workspace.style.transition = "";
@@ -2033,7 +2114,7 @@ function handleCameraSwipeTouchStart(event) {
   if (!touch) {
     return;
   }
-  beginCameraSwipe(touch.clientY, touch.identifier, event.target, null);
+  beginCameraSwipe(touch.clientX, touch.clientY, touch.identifier, event.target, null);
 }
 
 function handleCameraSwipeTouchMove(event) {
@@ -2041,7 +2122,7 @@ function handleCameraSwipeTouchMove(event) {
   if (!touch) {
     return;
   }
-  moveCameraSwipe(touch.clientY, touch.identifier, event);
+  moveCameraSwipe(touch.clientX, touch.clientY, touch.identifier, event);
 }
 
 function handleCameraSwipeTouchEnd(event) {
@@ -2055,6 +2136,7 @@ function handleCameraSwipeTouchEnd(event) {
 async function selectFilter(filename) {
   lookSelect.value = filename;
   cameraLookSelect.value = filename;
+  syncCameraListSelection();
   intensitySlider.value = defaults.intensity;
   applyFilterEffectDefaults(filename);
   syncIntensityControlState();

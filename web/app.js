@@ -1030,11 +1030,7 @@ function queueMobileCameraAutostart() {
   state.cameraAutostartAttempted = true;
   window.setTimeout(async () => {
     if (isMobileView() && !state.cameraActive) {
-      if (await canAutostartCameraWithoutPrompt()) {
-        startCamera({ automatic: true });
-      } else {
-        setStatus("Tap Open camera once to grant camera access.");
-      }
+      await startCamera({ automatic: true });
     }
   }, 0);
 }

@@ -1574,10 +1574,6 @@ function getCameraStackSizingImage(filename) {
     return null;
   }
 
-  if (isSourceCroppedFrameCamera(filter)) {
-    return null;
-  }
-
   const overlays = state.currentCameraOverlayImages;
   if (!overlays) {
     return null;
@@ -2155,7 +2151,7 @@ function isFrameDisabledCamera(filter) {
   return filter?.name === "620 B" || filter?.id === 51;
 }
 
-function isSourceCroppedFrameCamera(filter) {
+function isPhotoContainedFrameCamera(filter) {
   return filter?.id === 49 || filter?.id === 50 || filter?.name === "McDonald’s" || filter?.name === "Lunar Rabbits";
 }
 
@@ -2168,11 +2164,6 @@ function drawFrameOverlayList(context, images, effect, filter) {
   const alpha = Number.isFinite(value) ? Math.min(1, Math.max(0, value / 10)) : 1;
   const image = pickOverlayImage(images, stableOverlayIndex(effect.raw, images.length));
 
-  if (isSourceCroppedFrameCamera(filter)) {
-    drawFrameOverSource(context, image, alpha);
-    return;
-  }
-
   const region = parseFrameRegion(effect.params?.region);
 
   if (!region) {
@@ -2182,19 +2173,9 @@ function drawFrameOverlayList(context, images, effect, filter) {
     return;
   }
 
-  drawRegionFrameOverlay(context, image, alpha, region);
-}
-
-function drawFrameOverSource(context, image, alpha) {
-  if (!image || alpha <= 0) {
-    return;
-  }
-
-  context.save();
-  context.globalAlpha = alpha;
-  context.globalCompositeOperation = "source-over";
-  drawImageCover(context, image, 0, 0, context.canvas.width, context.canvas.height);
-  context.restore();
+  drawRegionFrameOverlay(context, image, alpha, region, {
+    fit: isPhotoContainedFrameCamera(filter) ? "contain" : "cover",
+  });
 }
 
 function drawOverlayList(context, images, effect, blendMode) {
@@ -2247,7 +2228,7 @@ function parseFrameRegion(regionValue) {
   };
 }
 
-function drawRegionFrameOverlay(context, image, alpha, region) {
+function drawRegionFrameOverlay(context, image, alpha, region, options = {}) {
   if (!image || alpha <= 0) {
     return;
   }
@@ -2271,13 +2252,32 @@ function drawRegionFrameOverlay(context, image, alpha, region) {
     width: region.width * width,
     height: region.height * height,
   };
-  drawImageCover(context, sourceCanvas, target.x, target.y, target.width, target.height);
+  if (options.fit === "contain") {
+    drawImageContain(context, sourceCanvas, target.x, target.y, target.width, target.height);
+  } else {
+    drawImageCover(context, sourceCanvas, target.x, target.y, target.width, target.height);
+  }
 
   context.save();
   context.globalAlpha = alpha;
   context.globalCompositeOperation = "source-over";
   context.drawImage(image, 0, 0, width, height);
   context.restore();
+}
+
+function drawImageContain(context, image, x, y, width, height) {
+  const sourceWidth = image.videoWidth || image.naturalWidth || image.width;
+  const sourceHeight = image.videoHeight || image.naturalHeight || image.height;
+  if (!sourceWidth || !sourceHeight || width <= 0 || height <= 0) {
+    return;
+  }
+
+  const scale = Math.min(width / sourceWidth, height / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  const drawX = x + (width - drawWidth) / 2;
+  const drawY = y + (height - drawHeight) / 2;
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
 }
 
 function drawImageCover(context, image, x, y, width, height) {

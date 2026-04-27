@@ -1161,10 +1161,7 @@ async function renderLiveCameraFrame() {
         width: cameraPreview.videoWidth,
         height: cameraPreview.videoHeight,
       };
-      const targetSize = getMobileCaptureCanvasSize(cameraPreview.videoWidth, cameraPreview.videoHeight);
-      fitCanvasToSize(targetSize.width, targetSize.height, CAMERA_PREVIEW_MAX_SIDE);
-      uploadSourceTexturePixels(createCameraPreviewTextureSource() ?? cameraPreview);
-      renderImage();
+      renderLiveCameraFrameNow();
     } catch (error) {
       console.error(error);
       setStatus("Failed to render live camera preview.");
@@ -1174,6 +1171,13 @@ async function renderLiveCameraFrame() {
   if (state.cameraActive) {
     state.cameraAnimationFrame = window.requestAnimationFrame(renderLiveCameraFrame);
   }
+}
+
+function renderLiveCameraFrameNow() {
+  const targetSize = getMobileCaptureCanvasSize(cameraPreview.videoWidth, cameraPreview.videoHeight);
+  fitCanvasToSize(targetSize.width, targetSize.height, CAMERA_PREVIEW_MAX_SIDE);
+  uploadSourceTexturePixels(createCameraPreviewTextureSource() ?? cameraPreview);
+  renderImage();
 }
 
 async function captureCameraFrame() {
@@ -1279,7 +1283,11 @@ function drawCameraVideoToContext(context, width, height) {
     context.translate(width, 0);
     context.scale(-1, 1);
   }
-  drawImageCover(context, cameraPreview, 0, 0, width, height, getCameraCropFactor());
+  if (getCameraCropFactor() <= 1) {
+    drawImageContain(context, cameraPreview, 0, 0, width, height);
+  } else {
+    drawImageCover(context, cameraPreview, 0, 0, width, height, getCameraCropFactor());
+  }
   context.restore();
 }
 
@@ -1446,8 +1454,7 @@ function restoreRenderState(previous) {
       width: cameraPreview.videoWidth,
       height: cameraPreview.videoHeight,
     };
-    fitCanvasToSize(cameraPreview.videoWidth, cameraPreview.videoHeight, CAMERA_PREVIEW_MAX_SIDE);
-    uploadSourceTexturePixels(cameraPreview);
+    renderLiveCameraFrameNow();
     startLiveCameraRender();
     return;
   }
@@ -2557,6 +2564,21 @@ function drawFrameCroppedToPhoto(context, image, alpha, region) {
   context.globalCompositeOperation = "source-over";
   context.drawImage(image, drawX, drawY, frameWidth * scale, frameHeight * scale);
   context.restore();
+}
+
+function drawImageContain(context, image, x, y, width, height) {
+  const sourceWidth = image.videoWidth || image.naturalWidth || image.width;
+  const sourceHeight = image.videoHeight || image.naturalHeight || image.height;
+  if (!sourceWidth || !sourceHeight || width <= 0 || height <= 0) {
+    return;
+  }
+
+  const scale = Math.min(width / sourceWidth, height / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  const drawX = x + (width - drawWidth) / 2;
+  const drawY = y + (height - drawHeight) / 2;
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
 }
 
 function drawImageCover(context, image, x, y, width, height, cropFactor = 1) {

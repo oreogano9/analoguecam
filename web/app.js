@@ -71,6 +71,21 @@ const COLOR_MATRIX = new Float32Array([
   0.24, 0.68, 0.08, 0.0,
   0.0, 0.0, 0.0, 1.0,
 ]);
+const RAINBOW_CAMERA_ID = 26;
+const RAINBOW_CONFIG = {
+  random: "2",
+  tilt1: 2,
+  tilt2: 8,
+  colors: [
+    { key: "red", hex: "#cd2d20", rgb: [0xcd / 255, 0x2d / 255, 0x20 / 255] },
+    { key: "yellow", hex: "#fabd24", rgb: [0xfa / 255, 0xbd / 255, 0x24 / 255] },
+    { key: "pink", hex: "#ae276e", rgb: [0xae / 255, 0x27 / 255, 0x6e / 255] },
+    { key: "green", hex: "#328a3b", rgb: [0x32 / 255, 0x8a / 255, 0x3b / 255] },
+    { key: "orange", hex: "#ea851a", rgb: [0xea / 255, 0x85 / 255, 0x1a / 255] },
+    { key: "blue", hex: "#0376b4", rgb: [0x03 / 255, 0x76 / 255, 0xb4 / 255] },
+    { key: "purple", hex: "#7f1f74", rgb: [0x7f / 255, 0x1f / 255, 0x74 / 255] },
+  ],
+};
 
 const NOMO_OVERLAY_PATHS = {
   nomoGrain: "grains_iso_400_jpg_50.jpg",
@@ -1842,6 +1857,10 @@ function renderPostEffectsStage(options = {}) {
 
   const includeNomoOverlays = options.includeNomoOverlays ?? !state.cameraActive;
   const includeCameraStack = options.includeCameraStack ?? includeNomoOverlays;
+  if (includeNomoOverlays && isRainbowFilterSelected()) {
+    output = applyRainbowCameraPass(output, canvas.width, canvas.height);
+  }
+
   if (includeNomoOverlays && hasNomoOverlayEffects({ includeCameraStack })) {
     output = compositeNomoOverlays(output, { includeCameraStack });
   }
@@ -1862,6 +1881,185 @@ function renderPostEffectsStage(options = {}) {
 
   uploadGrainTexture(output);
   renderBlit(state.grainTexture);
+}
+
+function isRainbowFilterSelected() {
+  return state.filterMap.get(lookSelect.value)?.id === RAINBOW_CAMERA_ID;
+}
+
+function applyRainbowCameraPass(rgba, width, height) {
+  const colorIndex = selectRainbowColorIndex(rgba, width, height);
+  const color = RAINBOW_CONFIG.colors[colorIndex]?.rgb ?? RAINBOW_CONFIG.colors[0].rgb;
+  const output = new Uint8Array(rgba.length);
+  const average = sampleAverageRgb(rgba, width, height);
+  const whiteBalance = getRainbowWhiteBalanceMultipliers(average, 0.2);
+  const tilt1 = RAINBOW_CONFIG.tilt1 / 100;
+  const tilt2 = RAINBOW_CONFIG.tilt2 / 100;
+
+  for (let index = 0; index < rgba.length; index += 4) {
+    const y = Math.floor(index / 4 / width);
+    const x = (index / 4) - y * width;
+    const vertical = height > 1 ? y / (height - 1) : 0.5;
+    const horizontal = width > 1 ? x / (width - 1) : 0.5;
+    const tilt = 1 - (Math.abs(vertical - 0.5) * tilt2) - (Math.abs(horizontal - 0.5) * tilt1);
+    const r = clampByte(applyRainbowSoftLight((rgba[index] / 255) * whiteBalance[0], color[0], 0.3) * 255 * tilt);
+    const g = clampByte(applyRainbowSoftLight((rgba[index + 1] / 255) * whiteBalance[1], color[1], 0.3) * 255 * tilt);
+    const b = clampByte(applyRainbowSoftLight((rgba[index + 2] / 255) * whiteBalance[2], color[2], 0.3) * 255 * tilt);
+    output[index] = r;
+    output[index + 1] = g;
+    output[index + 2] = b;
+    output[index + 3] = rgba[index + 3];
+  }
+
+  return output;
+}
+
+function applyRainbowSoftLight(base, color, alpha) {
+  const clampedBase = Math.max(0, Math.min(1, base));
+  const overlay = color * alpha;
+  return clampedBase * ((alpha * clampedBase) + (2 * overlay * (1 - clampedBase))) + clampedBase * (1 - alpha);
+}
+
+function selectRainbowColorIndex(rgba, width, height) {
+  if (RAINBOW_CONFIG.random !== "2") {
+    return stableOverlayIndex(`${state.sourceName}:rainbow`, RAINBOW_CONFIG.colors.length);
+  }
+
+  const sampleStep = Math.max(1, Math.floor(Math.sqrt((width * height) / 10000)));
+  const bins = new Float32Array(8);
+  let sampleCount = 0;
+
+  for (let y = 0; y < height; y += sampleStep) {
+    for (let x = 0; x < width; x += sampleStep) {
+      const offset = (y * width + x) * 4;
+      const match = rainbowMainColorMatch(rgba[offset] / 255, rgba[offset + 1] / 255, rgba[offset + 2] / 255, x, y, width, height);
+      if (!match) {
+        sampleCount++;
+        continue;
+      }
+
+      bins[match.index] += match.weight;
+      sampleCount++;
+    }
+  }
+
+  let selected = 0;
+  let selectedWeight = 0;
+  for (let index = 1; index < bins.length; index++) {
+    if (bins[index] > selectedWeight) {
+      selected = index;
+      selectedWeight = bins[index];
+    }
+  }
+
+  if (selectedWeight < sampleCount * 0.004) {
+    return 0;
+  }
+
+  return selected === 7 ? 0 : selected;
+}
+
+function rainbowMainColorMatch(r, g, b, x, y, width, height) {
+  const colorHsv = rgbToHsv(r, g, b);
+  const colorLab = rgbToRainbowLab(r, g, b);
+  let minShift = 0.25;
+  let minIndex = 0;
+
+  for (let index = 0; index < RAINBOW_CONFIG.colors.length; index++) {
+    const color = RAINBOW_CONFIG.colors[index].rgb;
+    const colorShift = maxChannelDistance(colorLab, rgbToRainbowLab(color[0], color[1], color[2]));
+    const saturationShift = Math.abs(colorHsv[1] - rgbToHsv(color[0], color[1], color[2])[1]);
+    if (colorShift < minShift && saturationShift < 0.4) {
+      minShift = colorShift;
+      minIndex = index + 1;
+    }
+  }
+
+  if (!minIndex) {
+    return null;
+  }
+
+  const heavy = 1 - Math.hypot((x / Math.max(1, width - 1)) - 0.5, (y / Math.max(1, height - 1)) - 0.5);
+  return {
+    index: minIndex,
+    weight: (1 - (minShift / 0.25) * 0.5) * heavy,
+  };
+}
+
+function sampleAverageRgb(rgba, width, height) {
+  const sampleStep = Math.max(1, Math.floor(Math.sqrt((width * height) / 10000)));
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let count = 0;
+
+  for (let y = 0; y < height; y += sampleStep) {
+    for (let x = 0; x < width; x += sampleStep) {
+      const offset = (y * width + x) * 4;
+      r += rgba[offset] / 255;
+      g += rgba[offset + 1] / 255;
+      b += rgba[offset + 2] / 255;
+      count++;
+    }
+  }
+
+  return count ? [r / count, g / count, b / count] : [1, 1, 1];
+}
+
+function getRainbowWhiteBalanceMultipliers(rgb, amount) {
+  const luma = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+  return rgb.map((channel) => channel > 0 ? (((luma / channel) - 1) * amount) + 1 : 1);
+}
+
+function rgbToHsv(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  let h = 0;
+  if (delta !== 0) {
+    if (max === r) {
+      h = ((g - b) / delta) % 6;
+    } else if (max === g) {
+      h = (b - r) / delta + 2;
+    } else {
+      h = (r - g) / delta + 4;
+    }
+    h /= 6;
+    if (h < 0) {
+      h += 1;
+    }
+  }
+
+  return [h, max === 0 ? 0 : delta / max, max];
+}
+
+function rgbToRainbowLab(r, g, b) {
+  const linear = [r, g, b].map((channel) => (
+    channel > 0.04045 ? Math.pow((channel + 0.055) / 1.055, 2.4) : channel / 12.92
+  ));
+  const x = (linear[0] * 0.4124 + linear[1] * 0.3576 + linear[2] * 0.1805) * 100;
+  const y = (linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722) * 100;
+  const z = (linear[0] * 0.0193 + linear[1] * 0.1192 + linear[2] * 0.9505) * 100;
+  const lab = xyzToLabComponent(x / 95.047, y / 100, z / 108.883);
+  return [
+    (((116 * lab[1]) - 16) / 100) * 0.78125,
+    (500 * (lab[0] - lab[1])) / 127,
+    (200 * (lab[1] - lab[2])) / 127,
+  ];
+}
+
+function xyzToLabComponent(x, y, z) {
+  return [x, y, z].map((value) => (
+    value > 0.008856 ? Math.pow(value, 1 / 3) : (7.787 * value) + (16 / 116)
+  ));
+}
+
+function maxChannelDistance(a, b) {
+  return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
+}
+
+function clampByte(value) {
+  return Math.max(0, Math.min(255, Math.round(value)));
 }
 
 function uploadGrainTexture(rgba) {

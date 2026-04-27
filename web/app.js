@@ -1284,13 +1284,33 @@ function drawCameraVideoToContext(context, width, height, options = {}) {
     context.scale(-1, 1);
   }
   if (options.preview) {
-    drawImageCover(context, cameraPreview, 0, 0, width, height, getCameraCropFactor());
+    drawCameraVideoStretch(context, width, height);
   } else if (getCameraCropFactor() <= 1) {
     drawImageContain(context, cameraPreview, 0, 0, width, height);
   } else {
     drawImageCover(context, cameraPreview, 0, 0, width, height, getCameraCropFactor());
   }
   context.restore();
+}
+
+function drawCameraVideoStretch(context, width, height) {
+  const sourceWidth = cameraPreview.videoWidth;
+  const sourceHeight = cameraPreview.videoHeight;
+  if (!sourceWidth || !sourceHeight || width <= 0 || height <= 0) {
+    return;
+  }
+
+  const cropFactor = getCameraCropFactor();
+  if (cropFactor <= 1) {
+    context.drawImage(cameraPreview, 0, 0, sourceWidth, sourceHeight, 0, 0, width, height);
+    return;
+  }
+
+  const zoomedWidth = sourceWidth / cropFactor;
+  const zoomedHeight = sourceHeight / cropFactor;
+  const cropX = (sourceWidth - zoomedWidth) / 2;
+  const cropY = (sourceHeight - zoomedHeight) / 2;
+  context.drawImage(cameraPreview, cropX, cropY, zoomedWidth, zoomedHeight, 0, 0, width, height);
 }
 
 function getCameraCropFactor() {

@@ -66,7 +66,9 @@ const CAMERA_PERMISSION_DENIED = "denied";
 const CAMERA_PREVIEW_MAX_SIDE = 1280;
 const STILL_IMAGE_MAX_SIDE = 2200;
 const MOBILE_SAVE_MAX_SIDE = 2200;
-const MOBILE_CAPTURE_ASPECT_RATIO = 3 / 4;
+const MOBILE_CAPTURE_WIDTH = 2688;
+const MOBILE_CAPTURE_HEIGHT = 4032;
+const MOBILE_CAPTURE_ASPECT_RATIO = MOBILE_CAPTURE_WIDTH / MOBILE_CAPTURE_HEIGHT;
 const JPEG_EXPORT_QUALITY = 0.98;
 const COLOR_MATRIX = new Float32Array([
   0.24, 0.68, 0.08, 0.0,
@@ -1045,8 +1047,8 @@ async function startCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: state.cameraFacingMode },
-        width: { ideal: 3024 },
-        height: { ideal: 4032 },
+        width: { ideal: MOBILE_CAPTURE_WIDTH },
+        height: { ideal: MOBILE_CAPTURE_HEIGHT },
         aspectRatio: { ideal: MOBILE_CAPTURE_ASPECT_RATIO },
       },
       audio: false,
@@ -1524,8 +1526,8 @@ async function switchCameraStream() {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: state.cameraFacingMode },
-        width: { ideal: 3024 },
-        height: { ideal: 4032 },
+        width: { ideal: MOBILE_CAPTURE_WIDTH },
+        height: { ideal: MOBILE_CAPTURE_HEIGHT },
         aspectRatio: { ideal: MOBILE_CAPTURE_ASPECT_RATIO },
       },
       audio: false,

@@ -376,6 +376,10 @@ button:disabled {
   font-size: 0;
 }
 
+.camera-crop-toggle {
+  display: none;
+}
+
 .camera-body-shutter:hover,
 .camera-body-shutter:focus,
 .camera-body-shutter:active,
@@ -887,6 +891,27 @@ h1 {
     left: 14.3%;
     top: 65.9%;
     width: 15.2%;
+  }
+
+  body.camera-mode-active .camera-crop-toggle {
+    -webkit-tap-highlight-color: transparent;
+    appearance: none;
+    background: rgba(0, 0, 0, 0.01);
+    border: 0;
+    color: rgba(255, 255, 255, 0.04);
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 900;
+    height: max(44px, 7svh);
+    min-height: 0;
+    min-width: 44px;
+    padding: 0;
+    pointer-events: auto;
+    position: fixed;
+    right: max(0.35rem, env(safe-area-inset-right));
+    top: max(0.35rem, env(safe-area-inset-top));
+    width: max(44px, 12vw);
+    z-index: 35;
   }
 
   body.camera-mode-active .camera-shell__top,

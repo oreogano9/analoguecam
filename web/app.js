@@ -12,6 +12,7 @@ const cameraFlash = document.querySelector("#cameraFlash");
 const cameraFlashTint = document.querySelector("#cameraFlashTint");
 const cameraFlashToggleButton = document.querySelector("#cameraFlashToggleButton");
 const cameraFacingToggleButton = document.querySelector("#cameraFacingToggleButton");
+const cameraCropToggleButton = document.querySelector("#cameraCropToggleButton");
 const cameraPresetLabel = document.querySelector("#cameraPresetLabel");
 const cameraLookSelect = document.querySelector("#cameraLookSelect");
 const cameraListDrawer = document.querySelector("#cameraListDrawer");
@@ -69,6 +70,11 @@ const MOBILE_SAVE_MAX_SIDE = 2200;
 const MOBILE_CAPTURE_WIDTH = 2688;
 const MOBILE_CAPTURE_HEIGHT = 4032;
 const MOBILE_CAPTURE_ASPECT_RATIO = MOBILE_CAPTURE_WIDTH / MOBILE_CAPTURE_HEIGHT;
+const CAMERA_CROP_MODES = [
+  { label: "26", factor: 1 },
+  { label: "35", factor: 35 / 26 },
+  { label: "50", factor: 50 / 26 },
+];
 const JPEG_EXPORT_QUALITY = 0.98;
 const COLOR_MATRIX = new Float32Array([
   0.24, 0.68, 0.08, 0.0,
@@ -131,6 +137,7 @@ const state = {
   cameraTorchSupported: false,
   cameraFacingMode: "environment",
   cameraSwitching: false,
+  cameraCropModeIndex: 0,
   mobileSettingsOpen: false,
   galleryDb: null,
   galleryReadyPromise: null,
@@ -993,6 +1000,7 @@ function updateMobileCameraState() {
   cameraPreviewGalleryButton.disabled = !mobile || !state.cameraActive;
   cameraFlashToggleButton.disabled = !mobile || !state.cameraActive;
   cameraFacingToggleButton.disabled = !mobile || !state.cameraActive;
+  cameraCropToggleButton.disabled = !mobile || !state.cameraActive;
   stopCameraButton.disabled = !mobile || !state.cameraActive;
   cameraSettingsButton.disabled = !mobile || !state.cameraActive;
   cameraLookSelect.disabled = !mobile || lookSelect.disabled;
@@ -1009,6 +1017,7 @@ function updateMobileCameraState() {
   }
   syncCameraListSelection();
   updateCameraFlashState();
+  updateCameraCropButton();
 }
 
 function queueMobileCameraAutostart() {
@@ -1047,9 +1056,8 @@ async function startCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: state.cameraFacingMode },
-        width: { ideal: MOBILE_CAPTURE_WIDTH },
-        height: { ideal: MOBILE_CAPTURE_HEIGHT },
-        aspectRatio: { ideal: MOBILE_CAPTURE_ASPECT_RATIO },
+        width: { ideal: 4032 },
+        height: { ideal: 3024 },
       },
       audio: false,
     });
@@ -1243,7 +1251,7 @@ async function captureRawCameraBlob() {
 
 function getMobileCaptureCanvasSize(sourceWidth, sourceHeight) {
   const sourceMaxSide = Math.max(sourceWidth, sourceHeight);
-  const height = Math.max(1, sourceMaxSide);
+  const height = Math.max(1, Math.min(MOBILE_CAPTURE_HEIGHT, sourceMaxSide));
   const width = Math.max(1, Math.round(height * MOBILE_CAPTURE_ASPECT_RATIO));
   return { width, height };
 }
@@ -1271,8 +1279,26 @@ function drawCameraVideoToContext(context, width, height) {
     context.translate(width, 0);
     context.scale(-1, 1);
   }
-  drawImageCover(context, cameraPreview, 0, 0, width, height);
+  drawImageCover(context, cameraPreview, 0, 0, width, height, getCameraCropFactor());
   context.restore();
+}
+
+function getCameraCropFactor() {
+  return CAMERA_CROP_MODES[state.cameraCropModeIndex]?.factor ?? 1;
+}
+
+function updateCameraCropButton() {
+  const mode = CAMERA_CROP_MODES[state.cameraCropModeIndex] ?? CAMERA_CROP_MODES[0];
+  cameraCropToggleButton.textContent = mode.label;
+  cameraCropToggleButton.setAttribute("aria-label", `${mode.label}mm camera crop`);
+}
+
+function toggleCameraCropMode() {
+  state.cameraCropModeIndex = (state.cameraCropModeIndex + 1) % CAMERA_CROP_MODES.length;
+  updateCameraCropButton();
+  if (state.cameraActive) {
+    renderImage();
+  }
 }
 
 function enqueueCameraSave(job) {
@@ -1526,9 +1552,8 @@ async function switchCameraStream() {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: state.cameraFacingMode },
-        width: { ideal: MOBILE_CAPTURE_WIDTH },
-        height: { ideal: MOBILE_CAPTURE_HEIGHT },
-        aspectRatio: { ideal: MOBILE_CAPTURE_ASPECT_RATIO },
+        width: { ideal: 4032 },
+        height: { ideal: 3024 },
       },
       audio: false,
     });
@@ -2534,7 +2559,7 @@ function drawFrameCroppedToPhoto(context, image, alpha, region) {
   context.restore();
 }
 
-function drawImageCover(context, image, x, y, width, height) {
+function drawImageCover(context, image, x, y, width, height, cropFactor = 1) {
   const sourceWidth = image.videoWidth || image.naturalWidth || image.width;
   const sourceHeight = image.videoHeight || image.naturalHeight || image.height;
   if (!sourceWidth || !sourceHeight || width <= 0 || height <= 0) {
@@ -2554,6 +2579,16 @@ function drawImageCover(context, image, x, y, width, height) {
   } else {
     cropHeight = sourceWidth / targetRatio;
     cropY = (sourceHeight - cropHeight) / 2;
+  }
+
+  const safeCropFactor = Math.max(1, Number(cropFactor) || 1);
+  if (safeCropFactor > 1) {
+    const zoomedWidth = cropWidth / safeCropFactor;
+    const zoomedHeight = cropHeight / safeCropFactor;
+    cropX += (cropWidth - zoomedWidth) / 2;
+    cropY += (cropHeight - zoomedHeight) / 2;
+    cropWidth = zoomedWidth;
+    cropHeight = zoomedHeight;
   }
 
   context.drawImage(image, cropX, cropY, cropWidth, cropHeight, x, y, width, height);
@@ -3118,6 +3153,7 @@ function disableControls(message) {
   cameraPreviewGalleryButton.disabled = true;
   cameraFlashToggleButton.disabled = true;
   cameraFacingToggleButton.disabled = true;
+  cameraCropToggleButton.disabled = true;
   stopCameraButton.disabled = true;
   cameraSettingsButton.disabled = true;
   galleryCameraButton.disabled = true;
@@ -3345,6 +3381,7 @@ cameraFacingToggleButton.addEventListener("click", () => {
     setStatus("Unable to switch camera.");
   });
 });
+cameraCropToggleButton.addEventListener("click", toggleCameraCropMode);
 stopCameraButton.addEventListener("click", stopCamera);
 cameraSettingsButton.addEventListener("click", () => stopCamera({ settings: true }));
 galleryCameraButton.addEventListener("click", startCamera);

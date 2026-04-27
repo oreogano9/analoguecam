@@ -1977,7 +1977,10 @@ function applyRainbowCameraPass(rgba, width, height) {
 function applyRainbowSoftLight(base, color, alpha) {
   const clampedBase = Math.max(0, Math.min(1, base));
   const overlay = color * alpha;
-  return clampedBase * ((alpha * clampedBase) + (2 * overlay * (1 - clampedBase))) + clampedBase * (1 - alpha);
+  if (2 * clampedBase < 1) {
+    return (2 * overlay * clampedBase) + (clampedBase * (1 - alpha));
+  }
+  return alpha - (2 * (1 - clampedBase) * (alpha - overlay)) + (clampedBase * (1 - alpha));
 }
 
 function selectRainbowColorIndex(rgba, width, height) {
@@ -2016,7 +2019,7 @@ function selectRainbowColorIndex(rgba, width, height) {
     return 0;
   }
 
-  return selected === 7 ? 0 : selected;
+  return selected === 7 ? 0 : selected - 1;
 }
 
 function rainbowMainColorMatch(r, g, b, x, y, width, height) {

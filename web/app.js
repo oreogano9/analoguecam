@@ -1023,7 +1023,6 @@ async function startCamera() {
     cameraPreviewSlot.append(canvas);
     await cameraPreview.play();
     state.cameraTorchSupported = detectTorchSupport(stream);
-    await applyCameraTorch(state.cameraFlashEnabled);
     state.cameraPermissionState = CAMERA_PERMISSION_GRANTED;
     writeStoredCameraPermission(CAMERA_PERMISSION_GRANTED);
     resetCanvasView();
@@ -1165,7 +1164,7 @@ async function saveCurrentCameraFrame() {
   }
 
   vibrateCapture();
-  flashCameraPreview();
+  await triggerCaptureFlash();
 
   const selected = state.filterMap.get(lookSelect.value);
   const rawBlob = await captureRawCameraBlob();
@@ -1411,6 +1410,20 @@ function flashCameraPreview() {
   cameraFlash.classList.add("is-active");
 }
 
+async function triggerCaptureFlash() {
+  if (!state.cameraFlashEnabled) {
+    flashCameraPreview();
+    return;
+  }
+
+  const hardwareFlash = await applyCameraTorch(true);
+  flashCameraPreview();
+  if (hardwareFlash) {
+    await delay(140);
+  }
+  await applyCameraTorch(false);
+}
+
 function updateCameraFlashState() {
   cameraFlashTint.classList.toggle("is-visible", state.cameraFlashEnabled);
   cameraFlashToggleButton.setAttribute("aria-pressed", String(state.cameraFlashEnabled));
@@ -1420,10 +1433,13 @@ function updateCameraFlashState() {
 async function toggleCameraFlash() {
   state.cameraFlashEnabled = !state.cameraFlashEnabled;
   updateCameraFlashState();
-  await applyCameraTorch(state.cameraFlashEnabled);
   if (state.cameraFlashEnabled && !state.cameraTorchSupported) {
     setStatus("Hardware flash is not available in this browser, so flash is visual only.");
   }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function detectTorchSupport(stream) {

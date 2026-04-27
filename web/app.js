@@ -11,6 +11,7 @@ const cameraPreviewGalleryButton = document.querySelector("#cameraPreviewGallery
 const cameraFlash = document.querySelector("#cameraFlash");
 const cameraFlashTint = document.querySelector("#cameraFlashTint");
 const cameraFlashToggleButton = document.querySelector("#cameraFlashToggleButton");
+const cameraFacingToggleButton = document.querySelector("#cameraFacingToggleButton");
 const cameraPresetLabel = document.querySelector("#cameraPresetLabel");
 const cameraLookSelect = document.querySelector("#cameraLookSelect");
 const cameraListDrawer = document.querySelector("#cameraListDrawer");
@@ -126,6 +127,7 @@ const state = {
   cameraPermissionState: readStoredCameraPermission(),
   cameraFlashEnabled: false,
   cameraTorchSupported: false,
+  cameraFacingMode: "user",
   mobileSettingsOpen: false,
   galleryDb: null,
   galleryReadyPromise: null,
@@ -957,6 +959,7 @@ function updateMobileCameraState() {
   cameraCaptureButton.disabled = !mobile || !state.cameraActive;
   cameraPreviewGalleryButton.disabled = !mobile || !state.cameraActive;
   cameraFlashToggleButton.disabled = !mobile || !state.cameraActive;
+  cameraFacingToggleButton.disabled = !mobile || !state.cameraActive;
   stopCameraButton.disabled = !mobile || !state.cameraActive;
   cameraSettingsButton.disabled = !mobile || !state.cameraActive;
   cameraLookSelect.disabled = !mobile || lookSelect.disabled;
@@ -1010,7 +1013,7 @@ async function startCamera() {
     state.mobileSettingsOpen = false;
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: { ideal: "environment" },
+        facingMode: { ideal: state.cameraFacingMode },
         width: { ideal: 4096 },
         height: { ideal: 2160 },
       },
@@ -1428,6 +1431,17 @@ function updateCameraFlashState() {
   cameraFlashTint.classList.toggle("is-visible", state.cameraFlashEnabled);
   cameraFlashToggleButton.setAttribute("aria-pressed", String(state.cameraFlashEnabled));
   cameraFlashToggleButton.classList.toggle("has-hardware-torch", state.cameraTorchSupported);
+}
+
+async function toggleCameraFacing() {
+  if (!state.cameraActive) {
+    state.cameraFacingMode = state.cameraFacingMode === "user" ? "environment" : "user";
+    return;
+  }
+
+  state.cameraFacingMode = state.cameraFacingMode === "user" ? "environment" : "user";
+  stopCamera();
+  await startCamera();
 }
 
 async function toggleCameraFlash() {
@@ -2989,6 +3003,7 @@ function disableControls(message) {
   cameraCaptureButton.disabled = true;
   cameraPreviewGalleryButton.disabled = true;
   cameraFlashToggleButton.disabled = true;
+  cameraFacingToggleButton.disabled = true;
   stopCameraButton.disabled = true;
   cameraSettingsButton.disabled = true;
   galleryCameraButton.disabled = true;
@@ -3208,6 +3223,12 @@ cameraFlashToggleButton.addEventListener("click", () => {
   toggleCameraFlash().catch((error) => {
     console.error(error);
     setStatus("Unable to toggle hardware flash.");
+  });
+});
+cameraFacingToggleButton.addEventListener("click", () => {
+  toggleCameraFacing().catch((error) => {
+    console.error(error);
+    setStatus("Unable to switch camera.");
   });
 });
 stopCameraButton.addEventListener("click", stopCamera);

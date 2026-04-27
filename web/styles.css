@@ -352,7 +352,8 @@ button:disabled {
   z-index: 4;
 }
 
-.camera-flash-toggle {
+.camera-flash-toggle,
+.camera-facing-toggle {
   -webkit-tap-highlight-color: transparent;
   appearance: none;
   background: transparent;
@@ -371,6 +372,10 @@ button:disabled {
   z-index: 4;
 }
 
+.camera-facing-toggle {
+  font-size: 0;
+}
+
 .camera-body-shutter:hover,
 .camera-body-shutter:focus,
 .camera-body-shutter:active,
@@ -378,7 +383,11 @@ button:disabled {
 .camera-flash-toggle:hover,
 .camera-flash-toggle:focus,
 .camera-flash-toggle:active,
-.camera-flash-toggle:focus-visible {
+.camera-flash-toggle:focus-visible,
+.camera-facing-toggle:hover,
+.camera-facing-toggle:focus,
+.camera-facing-toggle:active,
+.camera-facing-toggle:focus-visible {
   background: transparent;
   box-shadow: none;
   outline: none;
@@ -770,25 +779,25 @@ h1 {
 
   body.camera-mode-active .camera-device-frame {
     display: block;
-    height: max(100svh, calc(100vw * 2.0688));
+    height: max(100svh, calc(100vw * 2.1667));
     left: 50%;
     pointer-events: none;
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: max(100vw, calc(100svh * 0.4834));
+    width: max(100vw, calc(100svh * 0.4615));
     z-index: 3;
   }
 
   body.camera-mode-active .camera-preview-slot {
     display: block;
-    height: 14.6%;
-    left: 44.3%;
+    height: 18.75%;
+    left: 32.6%;
     overflow: hidden;
     pointer-events: none;
     position: absolute;
-    top: 23.1%;
-    width: 14.9%;
+    top: 37.4%;
+    width: 26.8%;
     z-index: 1;
   }
 
@@ -853,8 +862,31 @@ h1 {
     width: 100% !important;
   }
 
+  body.camera-mode-active .camera-body-shutter {
+    height: 12.5%;
+    left: 32.4%;
+    top: 75.4%;
+    width: 18.0%;
+  }
+
+  body.camera-mode-active .camera-flash-toggle {
+    height: 11.2%;
+    left: 71.2%;
+    top: 79.0%;
+    width: 20.0%;
+  }
+
+  body.camera-mode-active .camera-facing-toggle {
+    display: block;
+    height: 8.8%;
+    left: 14.3%;
+    top: 65.9%;
+    width: 15.2%;
+  }
+
+  body.camera-mode-active .camera-shell__top,
   body.camera-mode-active .camera-shell__hud {
-    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+    display: none;
   }
 
   body.camera-mode-active .camera-list-drawer {

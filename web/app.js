@@ -1574,6 +1574,10 @@ function getCameraStackSizingImage(filename) {
     return null;
   }
 
+  if (isSourceCroppedFrameCamera(filter)) {
+    return null;
+  }
+
   const overlays = state.currentCameraOverlayImages;
   if (!overlays) {
     return null;
@@ -2137,7 +2141,7 @@ function compositeCameraStackOverlays(context, cameraOverlays) {
     const type = String(effect.type ?? "").toLowerCase();
     if (type === "frame") {
       if (!isFrameDisabledCamera(filter)) {
-        drawFrameOverlayList(context, cameraOverlays.frame, effect);
+        drawFrameOverlayList(context, cameraOverlays.frame, effect, filter);
       }
     } else if (type === "blend") {
       drawOverlayList(context, cameraOverlays.blend, effect, blendModeFromCameraEffect(effect));
@@ -2151,7 +2155,11 @@ function isFrameDisabledCamera(filter) {
   return filter?.name === "620 B" || filter?.id === 51;
 }
 
-function drawFrameOverlayList(context, images, effect) {
+function isSourceCroppedFrameCamera(filter) {
+  return filter?.id === 49 || filter?.id === 50 || filter?.name === "McDonald’s" || filter?.name === "Lunar Rabbits";
+}
+
+function drawFrameOverlayList(context, images, effect, filter) {
   if (!images?.length) {
     return;
   }
@@ -2159,6 +2167,12 @@ function drawFrameOverlayList(context, images, effect) {
   const value = Number(effect.value ?? effect.params?.v ?? 10);
   const alpha = Number.isFinite(value) ? Math.min(1, Math.max(0, value / 10)) : 1;
   const image = pickOverlayImage(images, stableOverlayIndex(effect.raw, images.length));
+
+  if (isSourceCroppedFrameCamera(filter)) {
+    drawFrameOverSource(context, image, alpha);
+    return;
+  }
+
   const region = parseFrameRegion(effect.params?.region);
 
   if (!region) {
@@ -2169,6 +2183,18 @@ function drawFrameOverlayList(context, images, effect) {
   }
 
   drawRegionFrameOverlay(context, image, alpha, region);
+}
+
+function drawFrameOverSource(context, image, alpha) {
+  if (!image || alpha <= 0) {
+    return;
+  }
+
+  context.save();
+  context.globalAlpha = alpha;
+  context.globalCompositeOperation = "source-over";
+  drawImageCover(context, image, 0, 0, context.canvas.width, context.canvas.height);
+  context.restore();
 }
 
 function drawOverlayList(context, images, effect, blendMode) {
